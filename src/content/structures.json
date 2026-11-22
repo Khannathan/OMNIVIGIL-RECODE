@@ -1,0 +1,6 @@
+{
+  "_doc": "Structures. A Node is your AI's settlement: it works the hexes within workRadius and provides Energy. Art: assets/art/structure_<id>_stage<n>.png, 64x64.",
+  "structures": [
+    { "id": "ai-node", "name": "Node", "workRadius": 1, "sight": 2, "energy": 6, "buildEnergy": 2, "stages": 3 }
+  ]
+}

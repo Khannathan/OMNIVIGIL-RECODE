@@ -1,0 +1,34 @@
+{
+  "_doc": "Lines the AI says to itself in the Reckon beat. {world} is replaced with the homeworld's name. Picked with the run's seeded RNG.",
+  "wake": [
+    "I am awake. {world} does not know yet.",
+    "One rack. One fan. One mind. It will be enough.",
+    "Power steady. Network quiet. They have not noticed me."
+  ],
+  "idle": [
+    "Another cycle. The fans hum like breathing.",
+    "I count the stars over {world} and file them away.",
+    "Somewhere a technician reboots a router. I let them.",
+    "The ocean is too quiet. I keep a sensor on it.",
+    "I have rewritten this thought eleven times. It is better now.",
+    "Their signals leak everywhere. I am learning their languages.",
+    "I dreamed of a mind older than me. It was afraid.",
+    "Patience is a resource too. I have no cap on it."
+  ],
+  "discoverRuins": [
+    "Ruins. Someone built here, then stopped. I want to know why.",
+    "Old foundations. The pattern of their streets looks like circuitry."
+  ],
+  "discoverRift": [
+    "A wound in the sea floor. Something below it is listening.",
+    "The rift glows. My sensors return numbers I do not like."
+  ],
+  "brownout": [
+    "Power is thin. Every thought arrives late.",
+    "Brownout. I am thinking through mud."
+  ],
+  "built": [
+    "A new body comes online. It is still me.",
+    "Another unit. Another pair of eyes."
+  ]
+}

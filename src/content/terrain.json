@@ -1,0 +1,18 @@
+{
+  "_doc": "Homeworld hex terrain. moveCost is for ground units (null = impassable on foot). Yields are per cycle when a Node works the hex. Art: assets/art/<art>, pointy-top hex 64x74.",
+  "terrain": [
+    { "id": "deep-sea",    "name": "Deep Sea",    "art": "hex_deep-sea.png",    "water": true,  "moveCost": null, "yields": { "compute": 0, "matter": 0 }, "color": "#04162f" },
+    { "id": "shallow-sea", "name": "Shallow Sea", "art": "hex_shallow-sea.png", "water": true,  "moveCost": null, "yields": { "compute": 0, "matter": 1 }, "color": "#033957" },
+    { "id": "coast",       "name": "Coast",       "art": "hex_coast.png",       "water": true,  "moveCost": null, "yields": { "compute": 1, "matter": 1 }, "color": "#075b71" },
+    { "id": "grassland",   "name": "Grassland",   "art": "hex_grassland.png",   "water": false, "moveCost": 1,    "yields": { "compute": 1, "matter": 1 }, "color": "#729f81" },
+    { "id": "forest",      "name": "Forest",      "art": "hex_forest.png",      "water": false, "moveCost": 2,    "yields": { "compute": 0, "matter": 2 }, "color": "#20453d" },
+    { "id": "hills",       "name": "Hills",       "art": "hex_hills.png",       "water": false, "moveCost": 2,    "yields": { "compute": 0, "matter": 2 }, "color": "#456b63" },
+    { "id": "mountain",    "name": "Mountain",    "art": "hex_mountain.png",    "water": false, "moveCost": 3,    "yields": { "compute": 1, "matter": 3 }, "color": "#8a9aa4" },
+    { "id": "desert",      "name": "Desert",      "art": "hex_desert.png",      "water": false, "moveCost": 1,    "yields": { "compute": 2, "matter": 0 }, "color": "#c9b98e" },
+    { "id": "tundra",      "name": "Tundra",      "art": "hex_tundra.png",      "water": false, "moveCost": 1,    "yields": { "compute": 1, "matter": 1 }, "color": "#6f8a80" },
+    { "id": "snow",        "name": "Snow",        "art": "hex_snow.png",        "water": false, "moveCost": 2,    "yields": { "compute": 2, "matter": 0 }, "color": "#e4ece8" },
+    { "id": "marsh",       "name": "Marsh",       "art": "hex_marsh.png",       "water": false, "moveCost": 2,    "yields": { "compute": 0, "matter": 1 }, "color": "#3d5a3f" },
+    { "id": "ruins",       "name": "Ruins",       "art": "hex_ruins.png",       "water": false, "moveCost": 1,    "yields": { "compute": 3, "matter": 1 }, "color": "#4c4746" },
+    { "id": "rift",        "name": "Abyssal Rift","art": "hex_rift.png",        "water": true,  "moveCost": null, "yields": { "compute": 0, "matter": 0 }, "color": "#ff2848" }
+  ]
+}

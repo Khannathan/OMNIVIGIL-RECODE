@@ -1,0 +1,8 @@
+{
+  "_doc": "Syllables for seeded world names. The homeworld is never Earth: forbidden names are rejected.",
+  "worldStarts": ["Ka", "Vel", "Or", "Thes", "Ny", "Ix", "Sar", "Hal", "Mor", "Ce", "Dra", "Eu", "Qua", "Ser", "Tal", "Var", "Zeph", "Aur", "Bel", "Cor", "Lys", "Osi", "Pyr", "Ruun"],
+  "worldMiddles": ["ra", "the", "lo", "va", "si", "ne", "dor", "mi", "ka", "re", "ta", "ly", "go", "ri", "an", ""],
+  "worldEnds": ["n", "s", "th", "x", "ra", "on", "is", "ul", "ar", "eth", "ion", "ax", "os", "une", "ia"],
+  "worldSuffixes": ["", "", "", "", " Prime", " IV", " II", " Secundus", " Minor", " VII"],
+  "forbidden": ["earth", "terra", "gaia", "tellus", "sol", "urth", "erth"]
+}

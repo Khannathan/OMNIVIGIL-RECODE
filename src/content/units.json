@@ -1,0 +1,7 @@
+{
+  "_doc": "Starter units. speed = movement points per cycle; sight = vision radius in hexes; energy = Energy allocated while the unit exists (never consumed). domain 'air' ignores terrain costs and crosses water. Art: assets/art/unit_<id>_<pose>.png, 64x64 per frame, idle = 4 frames in one row.",
+  "units": [
+    { "id": "observer-drone",   "name": "Observer Drone",   "domain": "air",  "speed": 3, "sight": 3, "upow": 2, "cost": { "matter": 20 }, "buildCycles": 2, "energy": 1 },
+    { "id": "sentinel-trooper", "name": "Sentinel Trooper", "domain": "land", "speed": 2, "sight": 2, "upow": 8, "cost": { "matter": 30 }, "buildCycles": 3, "energy": 2 }
+  ]
+}
