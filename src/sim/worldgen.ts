@@ -1,13 +1,13 @@
 // Homeworld generation. Pure function of the seed: the same seed always
 // grows the same world, so saves only need the seed plus what changed.
 
-import { NAMES, TERRAIN, terrainId } from '../content';
+import { FACTION_DATA, NAMES, RULES, TERRAIN, terrainId } from '../content';
 import { colOf, distance, GridSize, hexesInRange, neighbors, rowOf } from './hex';
 import { Noise3 } from './noise';
 import { Rng } from './rng';
 
 /** Bump when worldgen output changes, so old saves can warn. */
-export const WORLDGEN_VERSION = 1;
+export const WORLDGEN_VERSION = 2;
 
 export const DEFAULT_GRID: GridSize = { width: 72, height: 44 };
 
@@ -24,7 +24,18 @@ export interface World extends GridSize {
   start: number;
   rifts: number[];
   ruins: number[];
+  /** The homeworld's factions and where their cities stand at the start. */
+  factions: FactionSeed[];
   checksum: number;
+}
+
+export interface FactionSeed {
+  id: string;
+  archetype: string;
+  name: string;
+  color: string;
+  capital: { tile: number; name: string };
+  towns: Array<{ tile: number; name: string }>;
 }
 
 const T = {
@@ -188,6 +199,8 @@ export function generateWorld(seed: string, grid: GridSize = DEFAULT_GRID): Worl
 
   const start = pickStart(terrain, grid, rng, rifts);
   const name = worldName(rng);
+  // Factions draw from their own stream so they never reshuffle the terrain.
+  const factions = placeFactions(terrain, grid, start, Rng.stream(seed, 'sites'));
   const landShare = 1 - oceanFrac;
   const kind = `${warmth > 0.05 ? 'Warm' : warmth < -0.05 ? 'Cold' : 'Temperate'} ${
     landShare < 0.4 ? 'ocean' : landShare > 0.46 ? 'continental' : 'archipelago'
@@ -204,6 +217,7 @@ export function generateWorld(seed: string, grid: GridSize = DEFAULT_GRID): Worl
     start,
     rifts,
     ruins,
+    factions,
     checksum: checksum(terrain),
   };
 }
@@ -239,6 +253,103 @@ function pickStart(terrain: Uint8Array, grid: GridSize, rng: Rng, rifts: number[
   scored.sort((a, b) => b[1] - a[1] || a[0] - b[0]);
   const top = scored.slice(0, Math.max(1, Math.floor(scored.length * 0.08)));
   return rng.pick(top)[0];
+}
+
+const SITEABLE = new Set([T.grassland, T.forest, T.desert, T.tundra, T.hills, T.marsh]);
+
+/**
+ * One faction per archetype: a capital plus a few towns. Every site is
+ * reachable from the player's start by land or by embarking across coast and
+ * shallow sea, so Dominion is always possible.
+ */
+function placeFactions(terrain: Uint8Array, grid: GridSize, start: number, rng: Rng): FactionSeed[] {
+  const cfg = RULES.factions;
+  const reach = flood(terrain, grid, start, (t) => !isWater(t) || t === T.coast || t === T.shallowSea);
+  const byLand = flood(terrain, grid, start, (t) => !isWater(t));
+  const score = (i: number): number => {
+    let s = 0;
+    for (const nb of hexesInRange(i, 1, grid)) {
+      const y = TERRAIN[terrain[nb]].yields;
+      s += y.compute + y.matter;
+      if (terrain[nb] === T.mountain) s -= 2;
+    }
+    if (byLand.has(i)) s += 4;
+    return s;
+  };
+  const candidates: Array<[number, number]> = [];
+  for (const i of reach) {
+    if (!SITEABLE.has(terrain[i])) continue;
+    const lat = Math.abs(rowOf(i, grid) / (grid.height - 1) - 0.5) * 2;
+    if (lat > 0.72) continue;
+    candidates.push([i, score(i)]);
+  }
+  candidates.sort((a, b) => b[1] - a[1] || a[0] - b[0]);
+
+  const archetypes = rng.shuffle([...FACTION_DATA.archetypes]);
+  const townNames = rng.shuffle([...FACTION_DATA.towns]);
+  const taken: number[] = [start];
+  const out: FactionSeed[] = [];
+  const pickSite = (ok: (i: number) => boolean): number | null => {
+    const pool = candidates.filter(([i]) => ok(i)).slice(0, 8);
+    return pool.length ? rng.pick(pool)[0] : null;
+  };
+
+  for (const arch of archetypes) {
+    let capital: number | null = null;
+    for (let relax = 0; capital === null && relax <= 8; relax++) {
+      const fromPlayer = Math.max(4, cfg.capitalMinDistFromPlayer - relax);
+      const apart = Math.max(4, cfg.capitalMinDistApart - relax);
+      capital = pickSite(
+        (i) =>
+          distance(i, start, grid) >= fromPlayer &&
+          out.every((f) => distance(i, f.capital.tile, grid) >= apart) &&
+          taken.every((t) => t !== i),
+      );
+    }
+    if (capital === null) continue; // a tiny landmass: fewer factions
+    taken.push(capital);
+    const root = rng.pick(FACTION_DATA.roots);
+    const word = rng.pick(FACTION_DATA.words);
+    const name = rng.pick(arch.names).replace('{root}', root).replace('{word}', word);
+    const faction: FactionSeed = {
+      id: arch.id,
+      archetype: arch.id,
+      name,
+      color: arch.color,
+      capital: { tile: capital, name: townNames.pop() ?? root },
+      towns: [],
+    };
+    const townCount = rng.int(cfg.townsMin, cfg.townsMax);
+    for (let k = 0; k < townCount; k++) {
+      const t = pickSite(
+        (i) =>
+          distance(i, capital!, grid) <= cfg.townMaxDistFromCapital &&
+          distance(i, start, grid) >= 5 &&
+          taken.every((o) => distance(i, o, grid) >= 3),
+      );
+      if (t === null) break;
+      taken.push(t);
+      faction.towns.push({ tile: t, name: townNames.pop() ?? `${root} ${k + 2}` });
+    }
+    out.push(faction);
+  }
+  // Stable order for the UI and the sim.
+  const order = FACTION_DATA.archetypes.map((a) => a.id);
+  return out.sort((a, b) => order.indexOf(a.archetype) - order.indexOf(b.archetype));
+}
+
+function flood(terrain: Uint8Array, grid: GridSize, from: number, pass: (t: number) => boolean): Set<number> {
+  const seen = new Set<number>([from]);
+  const queue = [from];
+  while (queue.length) {
+    const cur = queue.shift()!;
+    for (const nb of neighbors(cur, grid)) {
+      if (seen.has(nb) || !pass(terrain[nb])) continue;
+      seen.add(nb);
+      queue.push(nb);
+    }
+  }
+  return seen;
 }
 
 function capitalize(s: string): string {

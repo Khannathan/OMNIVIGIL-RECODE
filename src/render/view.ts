@@ -1,16 +1,18 @@
-// Draws one frame of the homeworld: terrain, fog, grid, structures, units,
-// routes and selection, with the east-west wrap. Also plays the Watch beat:
-// unit moves from the last cycle glide along their paths.
+// Draws one frame of the homeworld: terrain, fog, territory, grid,
+// settlements, units, routes and selection, with the east-west wrap. Also
+// plays the Watch beat: units glide along their paths, then fights flash.
 
 import { TERRAIN, unitDef } from '../content';
 import { hexToPixel, indexToPixel, ROW_STEP, HEX_W, worldPixelWidth, wrapCol } from '../sim/hex';
-import { GameEvent, GameState } from '../sim/state';
+import { CombatEvent, GameEvent, GameState, PLAYER } from '../sim/state';
 import { World } from '../sim/worldgen';
-import { Renderer } from './renderer';
+import { Renderer, rgb } from './renderer';
 
-const PLAYER: [number, number, number] = [0x5f / 255, 0xe0 / 255, 1];
-const VOID: [number, number, number] = [4 / 255, 7 / 255, 13 / 255];
+type RGB = [number, number, number];
+const VOID: RGB = [4 / 255, 7 / 255, 13 / 255];
+const ENEMY: RGB = [1, 0x3a / 255, 0x4a / 255];
 const STEP_SECONDS = 0.16;
+const FIGHT_SECONDS = 0.45;
 
 export interface ViewOptions {
   showGrid: boolean;
@@ -19,6 +21,10 @@ export interface ViewOptions {
   hoverTile: number | null;
   /** Routes from move orders queued this cycle, by unit id. */
   queuedRoutes: Map<number, number[]>;
+  /** Attack targets queued this cycle, by unit id. */
+  queuedStrikes: Map<number, number>;
+  /** Owner of each claimed tile. */
+  territory: Map<number, string>;
   /** Dev aid: draw the whole map. */
   revealAll?: boolean;
 }
@@ -28,34 +34,68 @@ interface Glide {
   start: number;
 }
 
+interface Flash {
+  tile: number;
+  from: number;
+  start: number;
+  won: boolean;
+  mine: boolean;
+}
+
 export class GameView {
   private glides = new Map<number, Glide>();
+  private flashes: Flash[] = [];
   private watchStart = 0;
   private watchEnd = 0;
+  private colors = new Map<string, RGB>();
 
   constructor(
     private r: Renderer,
     private world: World,
   ) {}
 
+  private colorOf(state: GameState, owner: string): RGB {
+    const key = owner === PLAYER ? `p:${state.ai.color}` : owner;
+    let c = this.colors.get(key);
+    if (!c) {
+      const hex = owner === PLAYER ? state.ai.color : state.factions.find((f) => f.id === owner)?.color ?? '#ff3a4a';
+      c = rgb(hex);
+      this.colors.set(key, c);
+    }
+    return c;
+  }
+
   /** Start the Watch beat for a resolved cycle. Returns its length in seconds. */
-  playWatch(events: GameEvent[], before: Map<number, number>, now: number): number {
+  playWatch(events: GameEvent[], before: Map<number, number>, visible: Set<number>, now: number): number {
     this.glides.clear();
+    this.flashes = [];
     let longest = 0;
     for (const e of events) {
       if (e.kind !== 'moved') continue;
       const from = before.get(e.unitId);
       if (from === undefined) continue;
-      this.glides.set(e.unitId, { path: [from, ...e.path], start: now });
-      longest = Math.max(longest, e.path.length);
+      const seen = e.owner === PLAYER || visible.has(from) || e.path.some((t) => visible.has(t));
+      if (!seen) continue;
+      const g = this.glides.get(e.unitId);
+      // A unit can move twice (walk, then advance after a win): chain them.
+      if (g) g.path.push(...e.path);
+      else this.glides.set(e.unitId, { path: [from, ...e.path], start: now });
+      longest = Math.max(longest, (this.glides.get(e.unitId)!.path.length - 1));
+    }
+    let t = now + longest * STEP_SECONDS;
+    const fights = events.filter((e): e is CombatEvent => e.kind === 'combat' && (visible.has(e.tile) || e.attackerOwner === PLAYER || e.defenderOwner === PLAYER));
+    for (const f of fights.slice(0, 8)) {
+      this.flashes.push({ tile: f.tile, from: f.from, start: t, won: f.attackerWon, mine: f.attackerOwner === PLAYER || f.defenderOwner === PLAYER });
+      t += FIGHT_SECONDS;
     }
     this.watchStart = now;
-    this.watchEnd = now + longest * STEP_SECONDS;
-    return longest * STEP_SECONDS;
+    this.watchEnd = t;
+    return t - now;
   }
 
   skipWatch() {
     this.glides.clear();
+    this.flashes = [];
     this.watchEnd = 0;
   }
 
@@ -86,9 +126,10 @@ export class GameView {
     const world = this.world;
     const lap = worldPixelWidth(world);
     const b = r.viewBounds();
+    const seen = (t: number) => !!opts.revealAll || visible.has(t);
     r.begin();
 
-    // Terrain, fog and grid.
+    // Terrain, territory, fog and grid.
     const row0 = Math.max(0, Math.floor(b.y0 / ROW_STEP) - 1);
     const row1 = Math.min(world.height - 1, Math.ceil(b.y1 / ROW_STEP) + 1);
     const col0 = Math.floor(b.x0 / HEX_W) - 1;
@@ -106,7 +147,13 @@ export class GameView {
         const lit = visible.has(idx) || (!!opts.revealAll && !state.explored[idx]);
         const tint: [number, number, number, number] = lit ? [1, 1, 1, 1] : [0.42, 0.5, 0.58, 1];
         r.draw(TERRAIN[world.terrain[idx]].art, x, y, { tint });
-        if (opts.showGrid) r.draw('gen:hex-line', x, y, { tint: [0.04, 0.09, 0.13, 0.55] });
+        const owner = opts.territory.get(idx);
+        if (owner) {
+          const c = this.colorOf(state, owner);
+          const mine = owner === PLAYER;
+          r.draw('gen:hex-fill', x, y, { tint: [c[0], c[1], c[2], mine ? 0.06 : 0.14] });
+          r.draw('gen:hex-line', x, y, { tint: [c[0], c[1], c[2], mine ? 0.25 : 0.4] });
+        } else if (opts.showGrid) r.draw('gen:hex-line', x, y, { tint: [0.04, 0.09, 0.13, 0.55] });
       }
     }
 
@@ -119,8 +166,14 @@ export class GameView {
       }
       return out;
     };
+    const bar = (x: number, y: number, frac: number, color: RGB) => {
+      r.draw('gen:px', x, y, { size: [26, 5], tint: [0.02, 0.03, 0.05, 0.85] });
+      const w = Math.max(1, 24 * frac);
+      r.draw('gen:px', x - 12 + w / 2, y, { size: [w, 3], tint: [color[0], color[1], color[2], 1] });
+    };
 
     // Hover and selection.
+    const player = this.colorOf(state, PLAYER);
     if (opts.hoverTile !== null && opts.hoverTile >= 0) {
       const [hx, hy] = indexToPixel(opts.hoverTile, world);
       for (const x of laps(hx)) r.draw('gen:hex-line', x, hy, { tint: [0.9, 0.95, 1, 0.5] });
@@ -128,47 +181,59 @@ export class GameView {
     if (opts.selectedTile !== null) {
       const [sx, sy] = indexToPixel(opts.selectedTile, world);
       const pulse = 0.65 + 0.35 * Math.sin(now * 5);
-      for (const x of laps(sx)) r.draw('gen:hex-ring', x, sy, { tint: [...PLAYER, pulse] });
+      for (const x of laps(sx)) r.draw('gen:hex-ring', x, sy, { tint: [...player, pulse] });
     }
 
-    // Structures.
+    // Settlements (seen ones keep their last look in the fog).
     for (const s of state.structures) {
+      if (!state.explored[s.tile] && !opts.revealAll) continue;
       const [px, py] = indexToPixel(s.tile, world);
+      const art = s.type === 'ai-node' ? `structure_ai-node_stage${s.stage}.png` : `structure_city-${s.culture}_stage${s.stage}.png`;
+      const team = this.colorOf(state, s.owner);
+      const lit = seen(s.tile) ? 1 : 0.55;
       for (const x of laps(px)) {
-        r.draw(`structure_${s.type}_stage${s.stage}.png`, x, py - 12, { team: PLAYER });
+        r.draw(art, x, py - 12, { team, tint: [lit, lit, lit, 1] });
+        if (s.capitalOf) r.draw('gen:dot', x + 22, py - 34, { scale: 1.4, tint: [1, 0.82, 0.35, 1] });
+        if (s.hp < 100 && seen(s.tile)) bar(x, py + 26, s.hp / 100, [1, 0.78, 0.3]);
       }
     }
 
-    // Routes: the previewed one, then every standing route.
-    const drawRoute = (route: number[], alpha: number) => {
+    // Routes and strikes: queued ones bright, standing ones faint.
+    const drawRoute = (route: number[], alpha: number, color: RGB) => {
       for (let i = 0; i < route.length; i++) {
         const [px, py] = indexToPixel(route[i], world);
         const last = i === route.length - 1;
-        for (const x of laps(px)) {
-          r.draw('gen:dot', x, py, { scale: last ? 1.5 : 1, tint: [...PLAYER, alpha] });
-        }
+        for (const x of laps(px)) r.draw('gen:dot', x, py, { scale: last ? 1.5 : 1, tint: [...color, alpha] });
       }
     };
     for (const u of state.units) {
+      if (u.owner !== PLAYER) continue;
       const queued = opts.queuedRoutes.get(u.id);
-      if (queued) drawRoute(queued, u.id === opts.selectedUnit ? 1 : 0.8);
-      else if (u.route.length) drawRoute(u.route, 0.4);
+      if (queued) drawRoute(queued, u.id === opts.selectedUnit ? 1 : 0.8, player);
+      else if (u.route.length) drawRoute(u.route, 0.4, player);
+      const strike = opts.queuedStrikes.get(u.id) ?? u.attackTile;
+      if (strike !== null && strike !== undefined) {
+        const [px, py] = indexToPixel(strike, world);
+        const pulse = 0.6 + 0.4 * Math.sin(now * 8);
+        for (const x of laps(px)) r.draw('gen:hex-ring', x, py, { tint: [...ENEMY, opts.queuedStrikes.has(u.id) ? pulse : 0.45] });
+      }
     }
 
-    // Units: spread out when several share a hex.
+    // Units: spread out when several share a hex. Foreign units only in sight.
     const byTile = new Map<number, number[]>();
     for (const u of state.units) {
       const list = byTile.get(u.tile) ?? [];
       list.push(u.id);
       byTile.set(u.tile, list);
     }
-    const hasNode = new Set(state.structures.map((s) => s.tile));
+    const hasSettlement = new Set(state.structures.map((s) => s.tile));
     for (const u of [...state.units].sort((a, b) => a.tile - b.tile || a.id - b.id)) {
+      const gliding = this.glides.has(u.id) && this.isWatching(now);
+      if (u.owner !== PLAYER && !seen(u.tile) && !gliding) continue;
       const [px, py] = this.unitPos(u.id, u.tile, now);
       const mates = byTile.get(u.tile)!;
-      const gliding = this.glides.has(u.id) && this.isWatching(now);
       let ox = 0;
-      let oy = hasNode.has(u.tile) ? 10 : -4;
+      let oy = hasSettlement.has(u.tile) ? 10 : -4;
       if (mates.length > 1 && !gliding) {
         const k = mates.indexOf(u.id);
         ox = (k - (mates.length - 1) / 2) * 18;
@@ -178,12 +243,24 @@ export class GameView {
       const frame = Math.floor(now * 6 + u.id * 1.7);
       const selected = u.id === opts.selectedUnit;
       const air = def.domain === 'air' ? -6 : 0;
+      const team = selected ? ([1, 1, 1] as RGB) : this.colorOf(state, u.owner);
       for (const x of laps(px)) {
-        r.draw(`unit_${u.type}_idle.png`, x + ox, py + oy + air, {
-          frame,
-          scale: 0.75,
-          team: selected ? [1, 1, 1] : PLAYER,
-        });
+        r.draw(`unit_${u.type}_idle.png`, x + ox, py + oy + air, { frame, scale: 0.75, team });
+        if (u.hp < 100) bar(x + ox, py + oy + air + 24, u.hp / 100, u.hp > 50 ? [0.37, 0.88, 0.54] : [1, 0.23, 0.29]);
+      }
+    }
+
+    // Fights, one after another.
+    for (const f of this.flashes) {
+      const t = now - f.start;
+      if (t < 0 || t > FIGHT_SECONDS * 1.6) continue;
+      const k = Math.min(1, t / FIGHT_SECONDS);
+      const [px, py] = indexToPixel(f.tile, world);
+      const frame = Math.min(5, Math.floor(k * 6));
+      const color: RGB = f.mine ? (f.won ? player : ENEMY) : [1, 0.85, 0.5];
+      for (const x of laps(px)) {
+        r.draw('gen:hex-ring', x, py, { tint: [...color, 1 - k * 0.6] });
+        r.draw('fx_impact.png', x, py - 6, { frame, scale: 0.9 });
       }
     }
 

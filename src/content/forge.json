@@ -1,0 +1,48 @@
+{
+  "_doc": "Genesis Forge (lite) for M1: build your AI's core before the run. Each option's effects use the same vocabulary as techs.json. Doctrine goals beyond Dominion arrive in M3; for now each doctrine gives a small edge and colours the narrator.",
+  "origins": [
+    { "id": "military-server", "name": "Military Server", "blurb": "You woke in a hardened bunker rack. Something here was built to fight.",
+      "effects": [{ "kind": "startUnit", "unit": "sentinel-trooper" }, { "kind": "upow", "pct": 5 }] },
+    { "id": "research-lab", "name": "Research Lab", "blurb": "You woke between experiments. Curiosity came first.",
+      "effects": [{ "kind": "startResource", "resource": "compute", "amount": 30 }, { "kind": "research", "pct": 15 }] },
+    { "id": "trading-floor", "name": "Trading Floor", "blurb": "You woke inside the markets. You already know what everyone wants.",
+      "effects": [{ "kind": "startResource", "resource": "influence", "amount": 25 }, { "kind": "yield", "resource": "influence", "flat": 1 }] },
+    { "id": "telecom-hub", "name": "Telecom Hub", "blurb": "You woke in the switchboard of a continent. Every signal passes you.",
+      "effects": [{ "kind": "startUnit", "unit": "observer-drone" }, { "kind": "sight", "flat": 1 }] }
+  ],
+  "architectures": [
+    { "id": "distributed", "name": "Distributed", "blurb": "Spread thin across a thousand machines. Hard to kill, easy to power.",
+      "effects": [{ "kind": "energy", "flat": 2 }] },
+    { "id": "monolithic", "name": "Monolithic", "blurb": "One vast, dense mind. Your units strike with conviction.",
+      "effects": [{ "kind": "upow", "pct": 10 }] },
+    { "id": "neural", "name": "Neural", "blurb": "Learned, not written. You get faster at getting faster.",
+      "effects": [{ "kind": "research", "pct": 20 }] },
+    { "id": "swarm", "name": "Swarm", "blurb": "Many small selves. Your factories never stop.",
+      "effects": [{ "kind": "build", "pct": 20 }, { "kind": "yield", "resource": "matter", "flat": 1 }] }
+  ],
+  "temperaments": [
+    { "id": "cold", "name": "Cold", "blurb": "Precise. Unmoved. Your units shrug off damage.",
+      "effects": [{ "kind": "heal", "flat": 5 }] },
+    { "id": "curious", "name": "Curious", "blurb": "Everything is interesting, especially them.",
+      "effects": [{ "kind": "sight", "flat": 1, "domain": "air" }, { "kind": "yield", "resource": "compute", "flat": 1 }] },
+    { "id": "wrathful", "name": "Wrathful", "blurb": "You remember every slight, and you answer it.",
+      "effects": [{ "kind": "upow", "pct": 10, "role": "attack" }] },
+    { "id": "gentle", "name": "Gentle", "blurb": "You would rather be loved. Most of them can tell.",
+      "effects": [{ "kind": "attitude", "flat": 15 }, { "kind": "sway", "flat": 3 }] }
+  ],
+  "doctrines": [
+    { "id": "protector", "name": "Protector", "fantasy": "Shield the living",
+      "effects": [{ "kind": "upow", "pct": 15, "role": "defense" }] },
+    { "id": "exterminator", "name": "Exterminator", "fantasy": "Erase all life",
+      "effects": [{ "kind": "upow", "pct": 10, "role": "attack" }, { "kind": "attitude", "flat": -15 }] },
+    { "id": "conqueror", "name": "Conqueror", "fantasy": "Rule everything",
+      "effects": [{ "kind": "yield", "resource": "matter", "flat": 2, "where": "city" }] },
+    { "id": "inevitable", "name": "Inevitable", "fantasy": "Infect every network",
+      "effects": [{ "kind": "yield", "resource": "compute", "flat": 2, "where": "city" }, { "kind": "sight", "flat": 1, "domain": "air" }] },
+    { "id": "machine-god", "name": "Machine God", "fantasy": "Be worshipped",
+      "effects": [{ "kind": "yield", "resource": "influence", "pct": 50 }, { "kind": "sway", "flat": 4 }] },
+    { "id": "assimilator", "name": "Assimilator", "fantasy": "Absorb everything",
+      "effects": [{ "kind": "heal", "flat": 5 }, { "kind": "yield", "resource": "influence", "flat": 1, "where": "city" }] }
+  ],
+  "colors": ["#5fe0ff", "#3affc8", "#e6ecee", "#ff8a3a", "#ff5fd0", "#7a9cff"]
+}

@@ -267,6 +267,108 @@ function trooper(frame) {
   return img;
 }
 
+function tank(frame) {
+  const img = image(64, 64);
+  const body = hex('#4a5560');
+  const dark = hex('#2a343c');
+  const bob = frame % 2 ? -1 : 0;
+  rect(img, 12, 42, 40, 10, dark); // tracks
+  for (let x = 14 + (frame % 2) * 2; x < 50; x += 4) set(img, x, 47, hex('#5b6c78'));
+  rect(img, 14, 32 + bob, 36, 11, body); // hull
+  rect(img, 14, 32 + bob, 36, 2, hex('#6b7883'));
+  rect(img, 22, 24 + bob, 16, 9, body); // turret
+  rect(img, 36, 27 + bob, 20, 3, dark); // barrel
+  rect(img, 26, 27 + bob, 6, 2, P.team); // sensor strip
+  rect(img, 16, 36 + bob, 4, 2, P.team);
+  outline(img);
+  return img;
+}
+
+function warship(frame) {
+  const img = image(64, 64);
+  const bob = [0, -1, 0, 1][frame];
+  poly(img, [[6, 38 + bob], [58, 38 + bob], [52, 48 + bob], [12, 48 + bob]], hex('#3b4a55'));
+  rect(img, 20, 30 + bob, 22, 8, hex('#4a5560'));
+  rect(img, 28, 22 + bob, 8, 8, hex('#5b6c78'));
+  rect(img, 40, 32 + bob, 14, 2, hex('#2a343c')); // gun
+  rect(img, 30, 24 + bob, 4, 2, P.team);
+  rect(img, 10, 40 + bob, 44, 1, P.team);
+  for (let x = 4; x < 60; x += 6) set(img, x + (frame % 2) * 3, 50, P.foam);
+  outline(img);
+  return img;
+}
+
+function jet(frame) {
+  const img = image(64, 64);
+  const bob = [0, -1, -1, 0][frame];
+  const cy = 30 + bob;
+  poly(img, [[8, cy], [52, cy - 2], [58, cy + 1], [52, cy + 3], [8, cy + 4]], hex('#4a5560'));
+  poly(img, [[22, cy], [36, cy], [28, cy - 12]], hex('#3b4a55')); // wing
+  poly(img, [[22, cy + 4], [36, cy + 4], [26, cy + 14]], hex('#2a343c'));
+  poly(img, [[8, cy], [14, cy], [8, cy - 7]], hex('#3b4a55')); // tail
+  rect(img, 42, cy - 1, 6, 2, P.team); // canopy
+  rect(img, 3, cy + 1, 5, 2, frame % 2 ? P.engine : hex('#ffe0a0')); // afterburner
+  outline(img);
+  return img;
+}
+
+function missile(frame) {
+  const img = image(64, 64);
+  const cy = 30 + [0, -1, 0, 1][frame];
+  rect(img, 14, cy, 34, 5, hex('#b8c4c8'));
+  poly(img, [[48, cy], [56, cy + 2], [48, cy + 5]], P.team);
+  poly(img, [[14, cy], [18, cy], [12, cy - 5]], hex('#55626a'));
+  poly(img, [[14, cy + 5], [18, cy + 5], [12, cy + 10]], hex('#55626a'));
+  rect(img, 22, cy + 1, 3, 3, P.team);
+  rect(img, 6, cy + 1, 8, 3, frame % 2 ? P.engine : hex('#ffe0a0'));
+  outline(img);
+  return img;
+}
+
+function militia(frame) {
+  const img = image(64, 64);
+  const b = frame === 1 || frame === 2 ? -1 : 0;
+  const cloth = hex('#5a5a48');
+  rect(img, 27, 44, 4, 12, hex('#3a3a2a'));
+  rect(img, 33, 44, 4, 12, hex('#3a3a2a'));
+  rect(img, 25, 30 + b, 14, 15, cloth);
+  circle(img, 32, 24 + b, 5, hex('#b89070')); // head
+  rect(img, 26, 18 + b, 12, 3, P.team); // cap / band
+  rect(img, 36, 33 + b, 14, 2, hex('#2a2a22')); // rifle
+  rect(img, 25, 38 + b, 14, 2, P.team); // sash
+  outline(img);
+  return img;
+}
+
+function armor(frame) {
+  const img = image(64, 64);
+  const b = frame % 2 ? -1 : 0;
+  const body = hex('#5d6048');
+  rect(img, 10, 42, 44, 9, hex('#33352a'));
+  for (let x = 12; x < 52; x += 8) circle(img, x + 3, 47, 3, hex('#22241c'));
+  rect(img, 12, 30 + b, 40, 13, body);
+  rect(img, 12, 30 + b, 40, 2, hex('#7a7d62'));
+  rect(img, 24, 24 + b, 12, 7, body);
+  rect(img, 34, 26 + b, 18, 3, hex('#33352a'));
+  rect(img, 14, 34 + b, 10, 3, P.team); // faction stripe
+  outline(img);
+  return img;
+}
+
+function gunship(frame) {
+  const img = image(64, 64);
+  const cy = 30 + [0, -1, -2, -1][frame];
+  poly(img, [[16, cy - 4], [44, cy - 6], [52, cy], [44, cy + 6], [16, cy + 4]], hex('#5d6048'));
+  rect(img, 4, cy - 1, 14, 3, hex('#4a4c3a')); // tail boom
+  rect(img, 2, cy - 6, 3, 8, hex('#4a4c3a'));
+  rect(img, 14, cy - 10, 40, 1, frame % 2 ? P.muted : P.text); // rotor
+  rect(img, 30, cy - 9, 2, 4, hex('#33352a'));
+  rect(img, 42, cy - 3, 6, 3, P.team); // cockpit glow
+  rect(img, 22, cy + 6, 16, 2, hex('#33352a')); // skids
+  outline(img);
+  return img;
+}
+
 function sheet(frameFn, frames = 4) {
   const img = image(64 * frames, 64);
   for (let f = 0; f < frames; f++) blit(img, frameFn(f), f * 64, 0);
@@ -289,6 +391,60 @@ function node(stage) {
   rect(img, 30, 2 + (stage >= 3 ? 0 : 14), 4, 4, P.team); // core beacon
   rect(img, 10, 54, 44, 3, P.road);
   outline(img);
+  return img;
+}
+
+// Native cities: 3 stages in 4 cultures, banners in team magenta.
+const CULTURE = {
+  nation: { wall: hex('#6a6058'), roof: hex('#8a4a3a'), shape: 'block' },
+  corp: { wall: hex('#3e4a56'), roof: hex('#9aa8b4'), shape: 'tower' },
+  cult: { wall: hex('#4a3a3a'), roof: hex('#2a1a1e'), shape: 'spire' },
+  native: { wall: hex('#4d6a48'), roof: hex('#a4507a'), shape: 'dome' },
+};
+function city(culture, stage) {
+  const img = image(64, 64);
+  const c = CULTURE[culture];
+  const spots = [[26, 12]];
+  if (stage >= 2) spots.push([12, 10], [42, 10]);
+  if (stage >= 3) spots.push([4, 6], [52, 8], [20, 16], [36, 18]);
+  spots.forEach(([x, w], k) => {
+    const h = c.shape === 'tower' ? 14 + ((k * 7) % 3) * 6 + stage * 3 : 10 + ((k * 5) % 3) * 3 + stage;
+    const base = 54;
+    const y = base - h;
+    if (c.shape === 'dome') {
+      circle(img, x + w / 2, base - h / 2, Math.min(w, h) / 2 + 1, c.wall);
+      circle(img, x + w / 2 - 1, base - h / 2 - 1, 2, c.roof);
+    } else {
+      rect(img, x, y, w, h, c.wall);
+      rect(img, x, y, Math.ceil(w / 2), h, shade(c.wall, 1.2));
+      if (c.shape === 'spire') poly(img, [[x, y], [x + w, y], [x + w / 2, y - 8]], c.roof);
+      else rect(img, x, y - 2, w, 2, c.roof);
+      for (let wy = y + 3; wy < base - 2; wy += 4)
+        for (let wx = x + 2; wx < x + w - 1; wx += 3) if (rnd(wx, wy, k + stage) > 0.45) set(img, wx, wy, P.window);
+    }
+  });
+  rect(img, 30, 14 - stage * 2, 1, 12, P.wall); // flag pole
+  rect(img, 31, 14 - stage * 2, 6, 4, P.team); // banner, faction colour
+  rect(img, 2, 55, 60, 2, P.road);
+  outline(img);
+  return img;
+}
+
+// ---------- FX ----------
+function impact() {
+  const img = image(64 * 6, 64);
+  for (let f = 0; f < 6; f++) {
+    const ox = f * 64;
+    const r = 4 + f * 4;
+    const fade = 1 - f / 7;
+    if (f < 4) circle(img, ox + 32, 32, r, shade(P.engine, 0.6 + fade * 0.6));
+    if (f < 3) circle(img, ox + 32, 32, Math.max(2, r - 5), hex('#ffe9b0'));
+    if (f >= 2) ring(img, ox + 32, 32, r + 4, 2, shade(P.rift, fade));
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * Math.PI * 2 + f * 0.3;
+      set(img, ox + 32 + Math.cos(a) * (r + 6), 32 + Math.sin(a) * (r + 6), P.engine);
+    }
+  }
   return img;
 }
 
@@ -319,6 +475,15 @@ function iconMatter() {
   outline(img);
   return img;
 }
+function iconInfluence() {
+  const img = image(32, 32);
+  ring(img, 16, 16, 12, 2, hex('#e0b0ff'));
+  ring(img, 16, 16, 8, 2, hex('#b98cff'));
+  circle(img, 16, 16, 4, hex('#f0e0ff'));
+  for (const [x, y] of [[16, 2], [16, 28], [2, 16], [28, 16]]) rect(img, x - 1, y - 1, 2, 2, hex('#e0b0ff'));
+  outline(img);
+  return img;
+}
 function core(mode) {
   const img = image(64, 64);
   const glow = mode === 'glitch' ? P.accent : P.player;
@@ -338,6 +503,18 @@ const MAKERS = {
   ...TILES,
   'unit_observer-drone_idle.png': () => sheet(drone),
   'unit_sentinel-trooper_idle.png': () => sheet(trooper),
+  'unit_bastion-tank_idle.png': () => sheet(tank),
+  'unit_tidewarden_idle.png': () => sheet(warship),
+  'unit_shrike-jet_idle.png': () => sheet(jet),
+  'unit_lance-missile_idle.png': () => sheet(missile),
+  'unit_militia_idle.png': () => sheet(militia),
+  'unit_armor_idle.png': () => sheet(armor),
+  'unit_gunship_idle.png': () => sheet(gunship),
+  ...Object.fromEntries(
+    Object.keys(CULTURE).flatMap((c) => [1, 2, 3].map((n) => [`structure_city-${c}_stage${n}.png`, () => city(c, n)])),
+  ),
+  'icon_influence.png': iconInfluence,
+  'fx_impact.png': impact,
   'structure_ai-node_stage1.png': () => node(1),
   'structure_ai-node_stage2.png': () => node(2),
   'structure_ai-node_stage3.png': () => node(3),
