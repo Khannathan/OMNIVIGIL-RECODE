@@ -2,13 +2,13 @@
 // serialises straight into a save and can be hashed to check determinism.
 // The world map itself is not stored: it is regrown from the seed.
 
-import { archetypeDef, FORGE, RULES, structureDef, TECHS, TERRAIN, unitDef, UNITS } from '../content';
+import { archetypeDef, FORGE, RarityId, RULES, SalvageDef, structureDef, TECHS, TERRAIN, unitDef, UNITS } from '../content';
 import { mods, playerEffects, sumFor } from './effects';
 import { distance, hexesInRange } from './hex';
 import { RngState, Rng } from './rng';
 import { World } from './worldgen';
 
-export const STATE_VERSION = 2;
+export const STATE_VERSION = 3;
 
 export type Beat = 'sense' | 'decide' | 'resolve' | 'watch' | 'reckon';
 export const BEATS: readonly Beat[] = ['sense', 'decide', 'resolve', 'watch', 'reckon'];
@@ -138,6 +138,7 @@ export type GameEvent =
   | { kind: 'met'; faction: string }
   | { kind: 'eliminated'; faction: string }
   | { kind: 'disbanded'; unit: string }
+  | { kind: 'salvage'; tile: number; unitId: number; rarity: RarityId; reward: SalvageDef; spawnedId?: number }
   | { kind: 'victory'; victory: 'dominion' }
   | { kind: 'defeat' };
 
@@ -147,7 +148,7 @@ export interface GameState {
   worldChecksum: number;
   cycle: number;
   /** One stream per system, so adding a system never reshuffles another. */
-  rng: { sim: RngState; combat: RngState; factions: RngState };
+  rng: { sim: RngState; combat: RngState; factions: RngState; loot: RngState };
   nextId: number;
   ai: AiProfile;
   resources: Resources;
@@ -155,6 +156,10 @@ export interface GameState {
   structures: Structure[];
   factions: FactionState[];
   techs: string[];
+  /** Precursor fragments found in ruins (ids in rewards.json). Permanent effects. */
+  relics: string[];
+  /** Ruin tiles already searched: each cache pays out once. */
+  salvaged: number[];
   research: { tech: string; progress: number } | null;
   stats: { computeEarned: number; kills: number; losses: number; citiesTaken: number };
   victory: { kind: 'dominion'; cycle: number } | null;
@@ -177,6 +182,7 @@ export function newGame(world: World, ai: AiProfile = DEFAULT_AI): GameState {
       sim: Rng.stream(world.seed, 'sim').state(),
       combat: Rng.stream(world.seed, 'combat').state(),
       factions: Rng.stream(world.seed, 'factions').state(),
+      loot: Rng.stream(world.seed, 'loot').state(),
     },
     nextId: 1,
     ai: { ...ai, epithet: ai.epithet.slice(0, 40) },
@@ -185,6 +191,8 @@ export function newGame(world: World, ai: AiProfile = DEFAULT_AI): GameState {
     structures: [],
     factions: [],
     techs: [],
+    relics: [],
+    salvaged: [],
     research: null,
     stats: { computeEarned: 0, kills: 0, losses: 0, citiesTaken: 0 },
     victory: null,

@@ -3,6 +3,9 @@
 import {
   archetypeDef,
   attitudeLabel,
+  relicDef,
+  REWARDS,
+  rarityDef,
   RULES,
   structureDef,
   techDef,
@@ -11,8 +14,11 @@ import {
   unitDef,
   UNITS,
 } from './content';
+import { audio } from './audio/audio';
 import { Renderer } from './render/renderer';
-import { GameView } from './render/view';
+import { Cue, GameView } from './render/view';
+import { advise, adviceLine, Advice, goals, PHASES } from './sim/advisor';
+import { revealsFor, RewardCard, salvageText } from './sim/rewards';
 import { saveGame } from './save/save';
 import { routeToStrike } from './sim/actions';
 import { bestDefender, forecast, Forecast, Side } from './sim/combat';
@@ -58,6 +64,25 @@ const BEAT_LABEL: Record<Beat, string> = {
 
 type Sheet = 'tech' | 'factions' | null;
 
+const PREFS_KEY = 'omnivigil.prefs';
+interface Prefs {
+  reduceMotion: boolean;
+  followCamera: boolean;
+}
+function loadPrefs(): Prefs {
+  const base: Prefs = {
+    reduceMotion: typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches,
+    followCamera: true,
+  };
+  try {
+    const raw = localStorage.getItem(PREFS_KEY);
+    if (raw) return { ...base, ...(JSON.parse(raw) as Partial<Prefs>) };
+  } catch {
+    /* storage blocked */
+  }
+  return base;
+}
+
 export class Game {
   private view: GameView;
   private visible: Set<number>;
@@ -84,6 +109,17 @@ export class Game {
   private toastTimer = 0;
   private coreMode: 'idle' | 'pulse' | 'glitch' = 'idle';
   private disposers: Array<() => void> = [];
+  private prefs = loadPrefs();
+  /** Next Best Move: ranked advice, and which one is on show. */
+  private advice: Advice[] = [];
+  private adviceIndex = 0;
+  /** Reward reveal in the Reckon: cards, how many are face up, timers. */
+  private reveal: { cards: RewardCard[]; flipped: number; open: boolean; timers: number[] } | null = null;
+  /** Camera glide target (follow during the Watch, or back afterwards). */
+  private camGoal: [number, number] | null = null;
+  private camReturn: [number, number] | null = null;
+  private followCancelled = false;
+  private labelsShown = false;
 
   constructor(
     private r: Renderer,
@@ -94,6 +130,8 @@ export class Game {
     notice?: string,
   ) {
     this.view = new GameView(r, world);
+    this.view.onCue = (cue: Cue, intensity?: number) => audio.play(cue, intensity);
+    this.view.reduceMotion = this.prefs.reduceMotion;
     this.visible = visibleTiles(state, world);
     this.terr = territory(state, world);
     const home = state.structures.find((s) => s.owner === PLAYER)?.tile ?? world.start;
@@ -112,6 +150,7 @@ export class Game {
 
   dispose() {
     cancelAnimationFrame(this.raf);
+    this.clearRevealTimers();
     for (const d of this.disposers) d();
     this.ui.innerHTML = '';
     document.documentElement.style.removeProperty('--player');
@@ -132,9 +171,11 @@ export class Game {
     if (k.has('s') || k.has('arrowdown')) this.r.camera.y += speed;
     if (k.has('a') || k.has('arrowleft')) this.r.camera.x -= speed;
     if (k.has('d') || k.has('arrowright')) this.r.camera.x += speed;
+    this.view.update(dt, now);
+    this.followCamera(dt);
     this.clampCamera();
 
-    if (this.beat === 'watch' && !this.view.isWatching(now)) this.enterReckon();
+    if (this.beat === 'watch' && !this.view.isWatching()) this.enterReckon();
 
     this.view.render(
       this.state,
@@ -147,12 +188,76 @@ export class Game {
         queuedRoutes: this.queuedRoutes,
         queuedStrikes: this.queuedStrikes,
         territory: this.terr,
+        adviceTile: this.canAct() ? this.adviceTile() : null,
         revealAll: this.revealAll,
       },
       now,
     );
+    this.renderLabels(now);
     this.raf = requestAnimationFrame(this.frame);
   };
+
+  /** During the Watch the camera glides to the big moments; afterwards it glides back. */
+  private followCamera(dt: number) {
+    const c = this.r.camera;
+    if (this.beat === 'watch' && this.prefs.followCamera && !this.followCancelled) {
+      const fp = this.view.focusPoint();
+      if (fp) {
+        const lap = worldPixelWidth(this.world);
+        let fx = fp[0];
+        while (fx - c.x > lap / 2) fx -= lap;
+        while (c.x - fx > lap / 2) fx += lap;
+        const sx = (fx - c.x) * c.zoom;
+        const sy = (fp[1] - c.y) * c.zoom;
+        const margin = Math.min(this.r.width, this.r.height) * 0.28;
+        if (Math.abs(sx) > margin || Math.abs(sy) > margin || this.camGoal) {
+          if (!this.camReturn) this.camReturn = [c.x, c.y];
+          this.camGoal = [fx, fp[1]];
+        }
+      }
+    }
+    if (!this.camGoal) return;
+    const k = 1 - Math.exp(-dt * (this.prefs.reduceMotion ? 20 : 4.5));
+    c.x += (this.camGoal[0] - c.x) * k;
+    c.y += (this.camGoal[1] - c.y) * k;
+    if (Math.abs(this.camGoal[0] - c.x) * c.zoom < 1 && Math.abs(this.camGoal[1] - c.y) * c.zoom < 1) this.camGoal = null;
+  }
+
+  /** Floating text over the map (kills, captures, yields), placed each frame. */
+  private renderLabels(now: number) {
+    const el = this.ui.querySelector<HTMLElement>('.floaters');
+    if (!el) return;
+    const labels = this.view.activeLabels();
+    if (!labels.length) {
+      if (this.labelsShown) el.innerHTML = '';
+      this.labelsShown = false;
+      return;
+    }
+    this.labelsShown = true;
+    const c = this.r.camera;
+    const lap = worldPixelWidth(this.world);
+    el.innerHTML = labels
+      .map((l) => {
+        let x = l.x;
+        while (x - c.x > lap / 2) x -= lap;
+        while (c.x - x > lap / 2) x += lap;
+        const age = (now - l.born) / l.life;
+        const sx = (x - c.x) * c.zoom + this.r.width / 2;
+        const sy = (l.y - c.y) * c.zoom + this.r.height / 2 - age * 26;
+        const op = age < 0.1 ? age / 0.1 : age > 0.7 ? (1 - age) / 0.3 : 1;
+        const pop = age < 0.12 ? 1.35 - age * 2.9 : 1;
+        return `<span class="floater ${l.cls}" style="transform:translate(${sx.toFixed(1)}px,${sy.toFixed(1)}px) translate(-50%,-50%) scale(${pop.toFixed(2)});opacity:${op.toFixed(2)}">${escapeHtml(l.text)}</span>`;
+      })
+      .join('');
+  }
+
+  private adviceTile(): number | null {
+    const a = this.advice[this.adviceIndex];
+    if (!a) return null;
+    if (a.act.kind === 'order' && a.act.tile !== undefined) return a.act.tile;
+    if (a.act.kind === 'focus') return a.act.tile;
+    return null;
+  }
 
   private clampCamera() {
     const c = this.r.camera;
@@ -169,6 +274,7 @@ export class Game {
 
   private endCycle() {
     if (!this.canAct()) return;
+    audio.play('end-cycle');
     this.closeMenu();
     this.sheet = null;
     this.target = null;
@@ -191,17 +297,132 @@ export class Game {
     );
     this.coreMode = bad ? 'glitch' : 'pulse';
     const seen = new Set([...seenBefore, ...this.visible]);
-    this.view.playWatch(report.events, before, seen, performance.now() / 1000);
+    this.followCancelled = false;
+    this.camReturn = null;
+    this.camGoal = null;
+    const names = (e: GameEvent): string => {
+      switch (e.kind) {
+        case 'city-captured':
+        case 'node-razed':
+          return e.name;
+        case 'built':
+          return unitDef(e.unit).name;
+        default:
+          return '';
+      }
+    };
+    this.view.playWatch(report.events, before, seen, names);
+    if (bad) audio.play('glitch');
     this.refresh();
   }
 
   private enterReckon() {
     this.view.skipWatch();
+    if (this.camReturn && !this.followCancelled) this.camGoal = this.camReturn;
+    this.camReturn = null;
     this.beat = 'reckon';
+    const report = this.report;
+    if (report) {
+      // Yields float up from your Node.
+      const y = report.events.find((e) => e.kind === 'yield');
+      const home = this.state.structures.find((x) => x.owner === PLAYER);
+      if (y && y.kind === 'yield' && home) {
+        const bits = [y.compute ? `+${y.compute} Compute` : '', y.matter ? `+${y.matter} Matter` : '', y.influence ? `+${y.influence} Influence` : ''].filter(Boolean);
+        if (bits.length) this.view.addLabel(home.tile, bits.join('  '), y.brownout ? 'bad' : 'yield', 2.6, -52);
+      }
+      const cards = revealsFor(this.state, report.events);
+      this.reveal = cards.length ? { cards, flipped: 0, open: true, timers: [] } : null;
+      audio.play('narrator-chime');
+    }
     this.refresh();
+    if (this.reveal) this.startReveal();
+  }
+
+  // ---------------------------------------------------------------- reward reveal
+
+  private clearRevealTimers() {
+    for (const t of this.reveal?.timers ?? []) window.clearTimeout(t);
+    if (this.reveal) this.reveal.timers = [];
+  }
+
+  /** Cards flip one by one, lowest rarity first; higher rarities build up before they turn. */
+  private startReveal() {
+    const rv = this.reveal!;
+    let t = 450;
+    rv.cards.forEach((card, i) => {
+      const tier = REWARDS.rarities.findIndex((r) => r.id === card.rarity);
+      const suspense = tier >= 2 && !this.prefs.reduceMotion ? 380 + tier * 140 : 0;
+      if (suspense) rv.timers.push(window.setTimeout(() => this.cardEl(i)?.classList.add('charging'), t));
+      t += suspense;
+      rv.timers.push(window.setTimeout(() => this.flipCard(i), t));
+      t += 520 + tier * 120;
+    });
+  }
+
+  private cardEl(i: number): HTMLElement | null {
+    return this.ui.querySelector<HTMLElement>(`.reveal .rcard[data-i="${i}"]`);
+  }
+
+  private flipCard(i: number, quiet = false) {
+    const rv = this.reveal;
+    if (!rv || !rv.open) return;
+    const el = this.cardEl(i);
+    if (!el || el.classList.contains('up')) return;
+    el.classList.remove('charging');
+    el.classList.add('up');
+    rv.flipped++;
+    const card = rv.cards[i];
+    const tier = REWARDS.rarities.findIndex((r) => r.id === card.rarity);
+    if (!quiet) {
+      audio.play('card-flip');
+      audio.play(`reward-${card.rarity}`);
+      if (tier >= 3 && !this.prefs.reduceMotion) {
+        const flash = this.ui.querySelector<HTMLElement>('.rarity-flash');
+        if (flash) {
+          flash.style.setProperty('--rc', rarityDef(card.rarity).color);
+          flash.classList.remove('go');
+          void flash.offsetWidth;
+          flash.classList.add('go');
+        }
+      }
+    }
+    if (tier >= 2) this.setCore('pulse');
+    if (rv.flipped >= rv.cards.length) this.ui.querySelector('.reveal')?.classList.add('done');
+  }
+
+  /** Space / Enter in the reveal: show everything, then close it. */
+  private advanceReveal(): boolean {
+    const rv = this.reveal;
+    if (!rv || !rv.open) return false;
+    if (rv.flipped < rv.cards.length) {
+      this.clearRevealTimers();
+      const best = rv.cards.length - 1;
+      rv.cards.forEach((_c, i) => this.flipCard(i, i !== best));
+      const card = rv.cards[best];
+      audio.play(`reward-${card.rarity}`);
+      return true;
+    }
+    this.clearRevealTimers();
+    rv.open = false;
+    this.refresh();
+    return true;
+  }
+
+  private setCore(mode: 'idle' | 'pulse' | 'glitch') {
+    this.coreMode = mode;
+    const img = this.ui.querySelector<HTMLImageElement>('.topbar .core');
+    if (img) {
+      img.className = `core ${mode}`;
+      img.src = `art/ui_core_${mode}.png`;
+    }
   }
 
   private finishReckon() {
+    if (this.reveal?.open) {
+      this.advanceReveal();
+      if (this.reveal?.open) return;
+    }
+    this.reveal = null;
     if (this.report?.events.some((e) => e.kind === 'victory')) this.ending = 'victory';
     if (this.report?.events.some((e) => e.kind === 'defeat')) this.ending = 'defeat';
     this.beat = 'sense';
@@ -243,9 +464,9 @@ export class Game {
     if (!unit) return;
     if (this.foreignAt(tile)) return this.aim(tile);
     this.target = null;
-    if (!this.state.explored[tile]) return this.toast('That hex is unexplored. Scout it first.');
+    if (!this.state.explored[tile]) return this.toast('That hex is unexplored. Scout it first.', 3500, 'ui-error');
     const path = findPath(this.world, unitDef(unit.type), unit.tile, tile, this.state.explored, { embark: canEmbark(this.state, PLAYER) });
-    if (!path) return this.toast(`${unitDef(unit.type).name} can't reach that hex.`);
+    if (!path) return this.toast(`${unitDef(unit.type).name} can't reach that hex.`, 3500, 'ui-error');
     this.dropOrder(unit.id);
     if (!path.length) {
       unit.route = [];
@@ -286,7 +507,54 @@ export class Game {
 
   private give(order: Order) {
     queueOrder(this.state, order);
+    audio.play('order');
     this.refresh();
+  }
+
+  /** Carry out the advisor's suggestion. */
+  private followAdvice(a: Advice | undefined = this.advice[this.adviceIndex]) {
+    if (!a) return;
+    const act = a.act;
+    switch (act.kind) {
+      case 'end-cycle':
+        return this.endCycle();
+      case 'sheet':
+        this.sheet = act.sheet;
+        audio.play('ui-open');
+        return this.refresh();
+      case 'focus':
+        this.view.focus(act.tile);
+        if (act.unitId !== undefined) {
+          this.selectedUnit = act.unitId;
+          this.selectedTile = this.state.units.find((u) => u.id === act.unitId)?.tile ?? act.tile;
+          this.target = act.tile;
+        } else this.select(act.tile);
+        return this.refresh();
+      case 'order': {
+        if (!this.canAct()) return;
+        const o = act.order;
+        if (act.unitId !== undefined) {
+          const unit = this.state.units.find((u) => u.id === act.unitId);
+          if (unit) {
+            this.selectedUnit = unit.id;
+            this.selectedTile = unit.tile;
+          }
+        }
+        if (o.kind === 'move') {
+          this.orderMove(o.to);
+          audio.play('order');
+          return;
+        }
+        if (o.kind === 'attack') {
+          this.target = o.target;
+          this.confirmAttack();
+          audio.play('order');
+          return;
+        }
+        if (act.tile !== undefined && o.kind === 'build') this.selectedTile = act.tile;
+        return this.give(o);
+      }
+    }
   }
 
   private unqueue(key: string) {
@@ -338,6 +606,8 @@ export class Game {
         const dy = e.clientY - this.drag.y;
         if (Math.abs(dx) + Math.abs(dy) > 5) this.drag.moved = true;
         if (this.drag.moved) {
+          this.followCancelled = true;
+          this.camGoal = null;
           this.r.camera.x = this.drag.camX - dx / this.r.camera.zoom;
           this.r.camera.y = this.drag.camY - dy / this.r.camera.zoom;
         }
@@ -363,6 +633,8 @@ export class Game {
     });
     this.on(canvas, 'wheel', (e) => {
       e.preventDefault();
+      this.camGoal = null;
+      this.followCancelled = true;
       const rect = canvas.getBoundingClientRect();
       const sx = e.clientX - rect.left;
       const sy = e.clientY - rect.top;
@@ -389,6 +661,8 @@ export class Game {
       } else if (key === 'enter') {
         if (this.beat === 'reckon') this.finishReckon();
         else if (!this.ending) this.endCycle();
+      } else if (key === 'n' && this.canAct() && !this.ending) {
+        this.followAdvice();
       } else if (key === 'escape') {
         this.moveMode = false;
         this.menuOpen = false;
@@ -420,12 +694,48 @@ export class Game {
     this.on(window, 'keyup', (e) => this.keys.delete(e.key.toLowerCase()));
     this.on(window, 'blur', () => this.keys.clear());
 
+    this.on(this.ui, 'input', (e) => {
+      const el = e.target as HTMLInputElement;
+      const k = el.dataset?.vol as 'music' | 'sfx' | undefined;
+      if (!k) return;
+      audio.settings[k] = Number(el.value);
+      audio.settings.muted = false;
+      audio.save();
+      if (k === 'sfx') audio.play('ui-click');
+    });
     this.on(this.ui, 'click', (e) => {
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-act]');
       if (!el || (el as HTMLButtonElement).disabled) return;
       const act = el.dataset.act!;
       const arg = el.dataset.arg ?? '';
+      if (act !== 'end-cycle' && act !== 'advice-do') audio.play('ui-click');
       switch (act) {
+        case 'advice-do':
+          return this.followAdvice();
+        case 'advice-next':
+          this.adviceIndex = (this.adviceIndex + 1) % Math.max(1, this.advice.length);
+          return this.renderAdvisor();
+        case 'reveal-card':
+          if (this.reveal?.open) this.flipCard(Number(arg));
+          return;
+        case 'reveal-ok':
+          this.advanceReveal();
+          return;
+        case 'mute':
+          audio.settings.muted = !audio.settings.muted;
+          audio.save();
+          return this.refresh();
+        case 'pref': {
+          const k = arg as keyof Prefs;
+          this.prefs[k] = !this.prefs[k];
+          try {
+            localStorage.setItem(PREFS_KEY, JSON.stringify(this.prefs));
+          } catch {
+            /* storage blocked */
+          }
+          this.view.reduceMotion = this.prefs.reduceMotion;
+          return this.refresh();
+        }
         case 'end-cycle':
           return this.endCycle();
         case 'skip':
@@ -465,6 +775,7 @@ export class Game {
         }
         case 'sheet':
           this.sheet = this.sheet === arg ? null : (arg as Sheet);
+          if (this.sheet) audio.play('ui-open');
           return this.refresh();
         case 'focus': {
           this.view.focus(Number(arg));
@@ -528,7 +839,8 @@ export class Game {
 
   // ---------------------------------------------------------------- HUD
 
-  private toast(text: string, ms = 3500) {
+  private toast(text: string, ms = 3500, sound: string | null = null) {
+    if (sound) audio.play(sound);
     const el = this.ui.querySelector<HTMLElement>('.toast');
     if (!el) return;
     el.textContent = text;
@@ -547,12 +859,23 @@ export class Game {
           <section class="panel sheet"></section>
           <section class="reckon"></section>
           <section class="ending"></section>
+          <aside class="goals"></aside>
+          <aside class="advisor"></aside>
+          <div class="floaters" aria-hidden="true"></div>
+          <section class="reveal" aria-live="polite"></section>
+          <div class="rarity-flash" aria-hidden="true"></div>
           <div class="watch-bar"></div>
           <div class="toast" role="status"></div>
-          <footer class="hints">Drag or WASD to pan · Wheel to zoom · Click to select · Right-click to move or attack · M move · R research · F factions · G grid · H home · Enter end cycle · Space skip</footer>
+          <footer class="hints">Drag or WASD to pan · Wheel to zoom · Click to select · Right-click to move or attack · M move · N next best move · R research · F factions · G grid · H home · Enter end cycle · Space skip</footer>
         </div>`;
     }
+    this.advice = this.state.defeated ? [] : advise(this.state, this.world);
+    if (this.adviceIndex >= this.advice.length) this.adviceIndex = 0;
     this.renderTop();
+    this.renderGoals();
+    this.renderAdvisor();
+    this.renderReveal();
+    this.syncMusic();
     this.renderSelection();
     this.renderInfo();
     this.renderSheet();
@@ -566,7 +889,6 @@ export class Game {
     const brown = e.allocated > e.total;
     const orders = s.orders.length;
     const beats = BEATS.map((b) => `<li class="${b === this.beat ? 'on' : ''}">${BEAT_LABEL[b]}</li>`).join('');
-    const dom = dominionProgress(s);
     const queuedTech = this.queued('research');
     let research: string;
     if (s.research) {
@@ -581,9 +903,6 @@ export class Game {
       <div class="brand"><b>OMNIVIGIL</b><span>${escapeHtml(s.ai.epithet || 'Unnamed')} · ${escapeHtml(this.world.name)}</span></div>
       <div class="cycle">Cycle <b>${s.cycle}</b></div>
       <ol class="beats" aria-label="Cycle beats">${beats}</ol>
-      <button class="goal" data-act="sheet" data-arg="factions" title="Dominion: hold every faction's original capital at once.">
-        <span>Objective</span><b>Dominion ${dom.held}/${dom.total}</b>${s.victory ? '<em>won</em>' : ''}
-      </button>
       <div class="resources">
         <span class="res ${brown ? 'warn' : ''}" title="Energy is allocated, never spent: units, builds and research each hold some. Over-allocate and you brown out: yields, builds and research run at half speed.">
           <img src="art/icon_energy.png" alt="Energy" width="20" height="20" /><b>${e.allocated}/${e.total}</b>${brown ? '<em>Brownout</em>' : ''}
@@ -597,6 +916,7 @@ export class Game {
       <button class="end" data-act="end-cycle" ${this.canAct() && !this.ending ? '' : 'disabled'}>
         End Cycle${orders ? ` <small>${orders} order${orders > 1 ? 's' : ''}</small>` : ''}
       </button>
+      <button class="ghost icon-btn" data-act="mute" aria-label="${audio.settings.muted ? 'Unmute' : 'Mute'}" title="${audio.settings.muted ? 'Sound off' : 'Sound on'}">${audio.settings.muted ? '🔇' : '🔊'}</button>
       <div class="menu-wrap">
         <button class="ghost" data-act="menu" aria-label="Menu">☰</button>
         ${
@@ -604,6 +924,10 @@ export class Game {
             ? `<div class="menu">
                 <div class="seed">Seed <code>${escapeHtml(s.seed)}</code></div>
                 <div class="seed">${forgeOptions(s.ai).map((o) => escapeHtml(o.name)).join(' · ')}</div>
+                <label class="slider">Music <input type="range" min="0" max="1" step="0.05" data-vol="music" value="${audio.settings.music}" /></label>
+                <label class="slider">Sound <input type="range" min="0" max="1" step="0.05" data-vol="sfx" value="${audio.settings.sfx}" /></label>
+                <button data-act="pref" data-arg="reduceMotion">${this.prefs.reduceMotion ? '✓ ' : ''}Reduce motion</button>
+                <button data-act="pref" data-arg="followCamera">${this.prefs.followCamera ? '✓ ' : ''}Camera follows battles</button>
                 <button data-act="grid">${this.showGrid ? 'Hide' : 'Show'} grid</button>
                 <button data-act="home">Find my Node</button>
                 <button data-act="save">Save now</button>
@@ -906,7 +1230,7 @@ export class Game {
     const el = this.ui.querySelector<HTMLElement>('.reckon')!;
     const bar = this.ui.querySelector<HTMLElement>('.watch-bar')!;
     bar.innerHTML = this.beat === 'watch' ? `<button data-act="skip">Watching… Space to skip</button>` : '';
-    if (this.beat !== 'reckon' || !this.report) {
+    if (this.beat !== 'reckon' || !this.report || this.reveal?.open) {
       el.innerHTML = '';
       el.classList.remove('show');
       return;
@@ -1013,9 +1337,129 @@ export class Game {
         return `<b class="gain">Dominion: every capital is yours.</b>`;
       case 'defeat':
         return `<em class="warn">Your last settlement is gone.</em>`;
+      case 'salvage': {
+        const r = rarityDef(e.rarity);
+        return `<span class="rarity-text" style="--rc:${r.color}">${r.name} cache:</span> ${escapeHtml(salvageText(e.reward))}.`;
+      }
       case 'moved':
         return '';
     }
+  }
+
+  // ---------------------------------------------------------------- M2: goals, advisor, reveal, music
+
+  private renderGoals() {
+    const el = this.ui.querySelector<HTMLElement>('.goals');
+    if (!el) return;
+    const g = goals(this.state, this.world, this.advice.length ? this.advice : undefined);
+    const o = g.objective;
+    const next = o.next
+      ? o.next.known
+        ? `Next: <a data-act="focus" data-arg="${o.next.tile}">${escapeHtml(o.next.name)}</a> <span class="muted">(${escapeHtml(o.next.faction)}, ${o.next.distance} hexes)</span>`
+        : `<span class="muted">Find the remaining capitals.</span>`
+      : '';
+    const now = this.canAct() ? g.now : ['Watch the cycle play out'];
+    el.innerHTML = `
+      <div class="grow now"><span class="gtag">Now</span><ul>${now.slice(0, 3).map((n) => `<li>${escapeHtml(n)}</li>`).join('')}${now.length > 3 ? `<li class="muted">+${now.length - 3} more</li>` : ''}</ul></div>
+      <button class="grow objective" data-act="sheet" data-arg="factions" title="Dominion: hold every faction's original capital at once.">
+        <span class="gtag">Objective</span>
+        <b>${o.title} ${o.held}/${o.total}${o.won ? ' <em class="gain">won</em>' : ''}</b>
+        <div class="bar"><i style="width:${o.total ? (o.held / o.total) * 100 : 0}%"></i></div>
+        <small>${next}</small>
+      </button>
+      <div class="grow ambition" title="${escapeHtml(g.ambition.text)}"><span class="gtag">Ambition</span>
+        <b>${escapeHtml(g.ambition.doctrine)}</b> <small class="muted">${escapeHtml(g.ambition.fantasy)}</small>
+        <small class="amb-text">${escapeHtml(g.ambition.text)}</small>
+        <ol class="phases">${PHASES.map((p, i) => `<li class="${i === g.ambition.phase ? 'on' : i < g.ambition.phase ? 'done' : ''}">${p}</li>`).join('')}</ol>
+      </div>`;
+  }
+
+  private renderAdvisor() {
+    const el = this.ui.querySelector<HTMLElement>('.advisor');
+    if (!el) return;
+    const a = this.advice[this.adviceIndex];
+    if (!a || !this.canAct() || this.ending) {
+      el.hidden = true;
+      return;
+    }
+    el.hidden = false;
+    const line = adviceLine(a, this.state.ai.temperament, this.state.cycle).replace('{world}', this.world.name);
+    const urgent = a.priority >= 90 ? 'urgent' : '';
+    el.className = `advisor ${urgent}`;
+    el.innerHTML = `
+      <img class="core-mini" src="art/ui_core_${a.priority >= 90 ? 'glitch' : 'idle'}.png" alt="" width="36" height="36" />
+      <div class="adv-body">
+        <small>Next best move <span class="muted">${this.adviceIndex + 1}/${this.advice.length}</span></small>
+        <p>“${escapeHtml(line)}”</p>
+        <div class="row">
+          <button data-act="advice-do" class="${a.act.kind === 'end-cycle' ? 'end' : ''}">${escapeHtml(a.verb)} <small>N</small></button>
+          ${this.advice.length > 1 ? '<button class="ghost" data-act="advice-next" title="Another suggestion">Next tip ›</button>' : ''}
+        </div>
+      </div>`;
+  }
+
+  private renderReveal() {
+    const el = this.ui.querySelector<HTMLElement>('.reveal');
+    if (!el) return;
+    const rv = this.reveal;
+    if (!rv || !rv.open || this.beat !== 'reckon') {
+      el.classList.remove('show');
+      el.innerHTML = '';
+      return;
+    }
+    if (el.classList.contains('show') && el.dataset.cycle === String(this.report?.cycle)) return; // keep the animation state
+    el.dataset.cycle = String(this.report?.cycle);
+    el.classList.add('show');
+    el.innerHTML = `
+      <h2>Spoils <small>cycle ${this.report?.cycle}</small></h2>
+      <div class="rcards">${rv.cards.map((c, i) => this.cardHtml(c, i)).join('')}</div>
+      <div class="row"><button class="end" data-act="reveal-ok">Collect <small>Space</small></button></div>`;
+  }
+
+  private cardHtml(c: RewardCard, i: number): string {
+    const r = rarityDef(c.rarity);
+    const lines = [...c.lines];
+    if (c.relic) lines.push(...relicDef(c.relic).effects.map(effectText));
+    if (c.tech) lines.push(...techDef(c.tech).effects.map(effectText), ...unlocksOf(c.tech).map((u) => `Unlocks ${u}`));
+    const icon = c.icon ? `<img class="ricon" src="art/${c.icon}" alt="" width="64" height="64" />` : `<div class="ricon glyph">${glyphFor(c)}</div>`;
+    return `
+      <button class="rcard r-${c.rarity}" data-act="reveal-card" data-arg="${i}" data-i="${i}" style="--rc:${r.color}">
+        <div class="rface back"><span>?</span></div>
+        <div class="rface front">
+          <span class="rarity">${r.name}</span>
+          ${icon}
+          <small class="kicker">${escapeHtml(c.kicker)}</small>
+          <b>${escapeHtml(c.title)}</b>
+          ${lines.length ? `<ul>${lines.map((l) => `<li>${escapeHtml(l)}</li>`).join('')}</ul>` : ''}
+          ${c.blurb ? `<p>${escapeHtml(c.blurb)}</p>` : ''}
+        </div>
+      </button>`;
+  }
+
+  private syncMusic() {
+    let cue = 'calm';
+    if (this.ending === 'victory') cue = 'victory';
+    else if (this.ending === 'defeat' || this.state.defeated) cue = 'defeat';
+    else if (this.state.factions.some((f) => f.atWar && !f.eliminated)) cue = 'war';
+    audio.music(cue);
+  }
+}
+
+function glyphFor(c: RewardCard): string {
+  switch (c.kicker) {
+    case 'Research complete':
+      return '⌬';
+    case 'City taken':
+    case 'Capital taken':
+      return '♜';
+    case 'Faction fallen':
+      return '✕';
+    case 'First contact':
+      return '◎';
+    case 'Homeworld victory':
+      return '♛';
+    default:
+      return '✦';
   }
 }
 

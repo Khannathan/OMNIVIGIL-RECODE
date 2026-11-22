@@ -521,6 +521,7 @@ All **[Claude idea]**: keep, tweak or cut.
 - **Your Successor:** in Intercontinuum, design a smaller AI to send ahead into a new seed. It becomes the player of a short side run.
 - **Ghost Signals:** the Precursor AI's code is hidden in the rarest cosmic entries. Collect it all to learn how it failed, and avoid or repeat its mistake.
 - **Bargain with the Abyss:** a hidden path where you ally with the Abyss Mother instead of killing her.
+- **Ruin caches and Precursor fragments** (built in M2): the first unit to stand on a ruin searches it, and a seeded rarity roll (Common to Mythic) pays out resources, a unit, or a relic: a permanent upgrade left by the Precursor AI. Gives exploring a reason and the reward reveal something to reveal.
 
 ---
 

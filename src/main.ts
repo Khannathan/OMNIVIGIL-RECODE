@@ -1,6 +1,7 @@
 import './ui/style.css';
 // Entry point: title screen (seed choice, continue) and the game.
 
+import { audio } from './audio/audio';
 import { Game } from './game';
 import { Renderer } from './render/renderer';
 import { deleteSave, listSaves, loadGame } from './save/save';
@@ -17,6 +18,9 @@ const ui = document.getElementById('ui') as HTMLElement;
 let renderer: Renderer;
 let game: Game | null = null;
 
+// Browsers only allow sound after a gesture: unlock on the first one.
+for (const type of ['pointerdown', 'keydown'] as const) window.addEventListener(type, () => audio.unlock(), { capture: true });
+
 async function boot() {
   try {
     renderer = new Renderer(canvas);
@@ -32,9 +36,11 @@ async function boot() {
 function showTitle() {
   game?.dispose();
   game = null;
+  audio.music('title');
   const saves = listSaves();
   ui.innerHTML = `
     <div class="title-screen">
+      <img class="key-art" src="art/key_title.png" alt="" onerror="this.remove()" />
       <div class="title-card">
         <h1>OMNIVIGIL</h1>
         <p class="tagline">You are an Ascendant AI. One seed, one universe.</p>
@@ -69,7 +75,7 @@ function showTitle() {
                 .join('')}</ul>`
             : ''
         }
-        <p class="foot">M1 Earthfall slice · placeholder art</p>
+        <p class="foot">M2 Feel · placeholder art and synth sound until the real assets land</p>
       </div>
     </div>`;
 
@@ -153,6 +159,7 @@ function lastForge(): AiProfile {
 }
 
 function showForge(world: World) {
+  audio.music('forge');
   const ai = lastForge();
   const groups: Array<{ key: 'origin' | 'architecture' | 'temperament' | 'doctrine'; title: string; hint: string; list: ForgeOption[] }> = [
     { key: 'origin', title: 'Origin', hint: 'Where you woke.', list: FORGE.origins },
@@ -254,6 +261,8 @@ function loadSafe(seed: string) {
 function play(world: World, state: ReturnType<typeof newGame>, notice?: string) {
   ui.innerHTML = '';
   game = new Game(renderer, ui, world, state, showTitle, notice);
+  // Dev only: poke the running game from the console.
+  if (import.meta.env.DEV) (window as unknown as { omnivigil: unknown }).omnivigil = { game, world, state };
 }
 
 boot();

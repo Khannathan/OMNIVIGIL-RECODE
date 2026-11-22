@@ -1,0 +1,35 @@
+{
+  "_doc": "Every audio file the game loads, by its final name (design bible section 19). Drop Suno files into assets/audio/ under these names and they replace the built-in synth placeholders. volume = relative loudness 0..1.",
+  "music": [
+    { "id": "title", "file": "music_title.mp3", "volume": 0.8 },
+    { "id": "forge", "file": "music_genesis-forge.mp3", "volume": 0.8 },
+    { "id": "calm", "file": "music_earthfall-calm.mp3", "volume": 0.7 },
+    { "id": "war", "file": "music_earthfall-war.mp3", "volume": 0.7 },
+    { "id": "victory", "file": "music_victory.mp3", "volume": 0.8 },
+    { "id": "defeat", "file": "music_defeat.mp3", "volume": 0.8 }
+  ],
+  "sfx": [
+    { "id": "ui-click", "file": "sfx_ui-click.ogg", "volume": 0.5 },
+    { "id": "ui-open", "file": "sfx_ui-open.ogg", "volume": 0.5 },
+    { "id": "ui-error", "file": "sfx_ui-error.ogg", "volume": 0.6 },
+    { "id": "order", "file": "sfx_order.ogg", "volume": 0.5 },
+    { "id": "end-cycle", "file": "sfx_end-cycle.ogg", "volume": 0.8 },
+    { "id": "shot-ballistic", "file": "sfx_ballistic.ogg", "volume": 0.45 },
+    { "id": "shot-laser", "file": "sfx_laser.ogg", "volume": 0.45 },
+    { "id": "missile", "file": "sfx_missile-launch.ogg", "volume": 0.7 },
+    { "id": "explosion-small", "file": "sfx_explosion-small.ogg", "volume": 0.7 },
+    { "id": "explosion-large", "file": "sfx_explosion-large.ogg", "volume": 0.9 },
+    { "id": "capture", "file": "sfx_capture.ogg", "volume": 0.8 },
+    { "id": "unit-online", "file": "sfx_unit-online.ogg", "volume": 0.5 },
+    { "id": "card-flip", "file": "sfx_card-flip.ogg", "volume": 0.6 },
+    { "id": "reward-common", "file": "sfx_reward-common.ogg", "volume": 0.6 },
+    { "id": "reward-rare", "file": "sfx_reward-rare.ogg", "volume": 0.7 },
+    { "id": "reward-epic", "file": "sfx_reward-epic.ogg", "volume": 0.8 },
+    { "id": "reward-legendary", "file": "sfx_reward-legendary.ogg", "volume": 0.9 },
+    { "id": "reward-mythic", "file": "sfx_reward-mythic.ogg", "volume": 1 },
+    { "id": "core-pulse", "file": "sfx_core-pulse.ogg", "volume": 0.5 },
+    { "id": "glitch", "file": "sfx_glitch.ogg", "volume": 0.6 },
+    { "id": "narrator-chime", "file": "sfx_narrator-chime.ogg", "volume": 0.5 },
+    { "id": "alert", "file": "sfx_alert.ogg", "volume": 0.8 }
+  ]
+}

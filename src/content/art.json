@@ -45,6 +45,17 @@
     {"file": "ui_core_idle.png", "w": 64, "h": 64},
     {"file": "ui_core_pulse.png", "w": 64, "h": 64},
     {"file": "ui_core_glitch.png", "w": 64, "h": 64},
-    {"file": "fx_impact.png", "w": 384, "h": 64, "frames": 6}
+    {"file": "fx_impact.png", "w": 384, "h": 64, "frames": 6},
+    {"file": "fx_explosion.png", "w": 512, "h": 64, "frames": 8},
+    {"file": "fx_muzzle.png", "w": 128, "h": 32, "frames": 4},
+    {"file": "fx_tracer.png", "w": 24, "h": 6},
+    {"file": "icon_relic_cracked-lens.png", "w": 64, "h": 64, "ui": true},
+    {"file": "icon_relic_echo-lattice.png", "w": 64, "h": 64, "ui": true},
+    {"file": "icon_relic_iron-psalm.png", "w": 64, "h": 64, "ui": true},
+    {"file": "icon_relic_silent-ledger.png", "w": 64, "h": 64, "ui": true},
+    {"file": "icon_relic_precursor-heartbeat.png", "w": 64, "h": 64, "ui": true},
+    {"file": "icon_relic_witness-engine.png", "w": 64, "h": 64, "ui": true},
+    {"file": "icon_relic_the-first-fork.png", "w": 64, "h": 64, "ui": true},
+    {"file": "key_title.png", "w": 1280, "h": 720, "ui": true}
   ]
 }

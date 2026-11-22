@@ -1,5 +1,6 @@
-// WebGL2 sprite batcher. One texture atlas, one instanced draw call per
-// frame. Pure magenta (#ff00ff) pixels are recoloured to the team colour in
+// WebGL2 sprite batcher. One texture atlas, two instanced draw calls per
+// frame: normal sprites, then an additive glow layer for FX (M2).
+// Sprites can rotate (tracers, debris). Pure magenta (#ff00ff) pixels are recoloured to the team colour in
 // the shader, so art only needs painting once (design bible section 18).
 
 import { ART, ArtDef } from '../content';
@@ -25,6 +26,10 @@ export interface DrawOpts {
   team?: [number, number, number];
   /** Exact size in world pixels, overriding the art size and scale. */
   size?: [number, number];
+  /** Radians, clockwise on screen. */
+  rotation?: number;
+  /** Draw in the additive glow layer (on top of everything else). */
+  additive?: boolean;
 }
 
 export interface Camera {
@@ -33,8 +38,9 @@ export interface Camera {
   zoom: number;
 }
 
-const FLOATS = 15; // x y w h | u0 v0 u1 v1 | r g b a | tr tg tb
+const FLOATS = 16; // x y w h | u0 v0 u1 v1 | r g b a | tr tg tb rot
 const MAX_SPRITES = 40000;
+const MAX_GLOW = 4000;
 const ATLAS = 2048;
 
 const VERT = `#version 300 es
@@ -42,7 +48,7 @@ layout(location=0) in vec2 a_corner;
 layout(location=1) in vec4 a_rect;
 layout(location=2) in vec4 a_uv;
 layout(location=3) in vec4 a_tint;
-layout(location=4) in vec3 a_team;
+layout(location=4) in vec4 a_team;
 uniform vec2 u_cam;
 uniform float u_zoom;
 uniform vec2 u_view;
@@ -50,12 +56,15 @@ out vec2 v_uv;
 out vec4 v_tint;
 out vec3 v_team;
 void main() {
-  vec2 world = a_rect.xy + (a_corner - 0.5) * a_rect.zw;
+  vec2 local = (a_corner - 0.5) * a_rect.zw;
+  float c = cos(a_team.w);
+  float s = sin(a_team.w);
+  vec2 world = a_rect.xy + vec2(local.x * c - local.y * s, local.x * s + local.y * c);
   vec2 screen = floor((world - u_cam) * u_zoom + 0.5);
   gl_Position = vec4(screen / (u_view * 0.5) * vec2(1.0, -1.0), 0.0, 1.0);
   v_uv = mix(a_uv.xy, a_uv.zw, a_corner);
   v_tint = a_tint;
-  v_team = a_team;
+  v_team = a_team.rgb;
 }`;
 
 const FRAG = `#version 300 es
@@ -86,6 +95,8 @@ export class Renderer {
   private buffer: WebGLBuffer;
   private data = new Float32Array(MAX_SPRITES * FLOATS);
   private count = 0;
+  private glow = new Float32Array(MAX_GLOW * FLOATS);
+  private glowCount = 0;
   private sprites = new Map<string, Sprite>();
   private tex: WebGLTexture;
   private uCam: WebGLUniformLocation;
@@ -128,7 +139,7 @@ export class Renderer {
       [1, 4, 0],
       [2, 4, 4],
       [3, 4, 8],
-      [4, 3, 12],
+      [4, 4, 12],
     ];
     for (const [loc, size, offset] of attrs) {
       gl.enableVertexAttribArray(loc);
@@ -160,6 +171,7 @@ export class Renderer {
       { def: { file: 'gen:hex-fill', w: HEX_W, h: HEX_H }, img: hexShape(0, true) },
       { def: { file: 'gen:dot', w: 8, h: 8 }, img: dot(8) },
       { def: { file: 'gen:px', w: 4, h: 4 }, img: block(4) },
+      { def: { file: 'gen:glow', w: 32, h: 32 }, img: softGlow(32) },
     ];
     this.buildAtlas([...images, ...extra]);
     return missing;
@@ -221,18 +233,21 @@ export class Renderer {
 
   begin() {
     this.count = 0;
+    this.glowCount = 0;
   }
 
   draw(name: string, x: number, y: number, opts: DrawOpts = {}) {
     const s = this.sprites.get(name);
-    if (!s || this.count >= MAX_SPRITES) return;
+    if (!s) return;
+    const glow = !!opts.additive;
+    if (glow ? this.glowCount >= MAX_GLOW : this.count >= MAX_SPRITES) return;
     const scale = opts.scale ?? 1;
     const frame = (opts.frame ?? 0) % s.frames;
     const fw = (s.u1 - s.u0) / s.frames;
     const tint = opts.tint ?? [1, 1, 1, 1];
     const team = opts.team ?? [1, 0, 1];
-    const o = this.count * FLOATS;
-    const d = this.data;
+    const o = (glow ? this.glowCount : this.count) * FLOATS;
+    const d = glow ? this.glow : this.data;
     d[o] = x;
     d[o + 1] = y;
     d[o + 2] = opts.size ? opts.size[0] : s.w * scale;
@@ -248,7 +263,9 @@ export class Renderer {
     d[o + 12] = team[0];
     d[o + 13] = team[1];
     d[o + 14] = team[2];
-    this.count++;
+    d[o + 15] = opts.rotation ?? 0;
+    if (glow) this.glowCount++;
+    else this.count++;
   }
 
   end(clear: [number, number, number]) {
@@ -261,8 +278,15 @@ export class Renderer {
     gl.uniform1f(this.uZoom, this.camera.zoom * this.dpr);
     gl.uniform2f(this.uView, this.canvas.width, this.canvas.height);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.data, 0, this.count * FLOATS);
     gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, this.count);
+    if (this.glowCount) {
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.glow, 0, this.glowCount * FLOATS);
+      gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, this.glowCount);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    }
   }
 
   screenToWorld(sx: number, sy: number): [number, number] {
@@ -339,6 +363,20 @@ function block(size: number): HTMLCanvasElement {
 export function rgb(hex: string): [number, number, number] {
   const n = parseInt(hex.slice(1), 16);
   return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+}
+
+/** Soft radial falloff, for additive light. */
+function softGlow(size: number): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d')!;
+  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.35, 'rgba(255,255,255,0.45)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  return c;
 }
 
 function dot(size: number): HTMLCanvasElement {

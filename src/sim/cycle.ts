@@ -15,6 +15,7 @@ import { diplomacyPhase, eliminationPhase, factionPhase } from './factions';
 import { hexesInRange } from './hex';
 import { findPath } from './path';
 import { Rng } from './rng';
+import { salvagePhase } from './rewards';
 import {
   availableTechs,
   buildableUnits,
@@ -189,6 +190,8 @@ export function resolveCycle(state: GameState, world: World): CycleReport {
     });
   }
   meetFactions(state, world, events);
+  const loot = Rng.restore(state.rng.loot);
+  salvagePhase(state, world, events, loot);
 
   // 11. Endings. Victory can be played past.
   if (!state.victory) {
@@ -208,7 +211,7 @@ export function resolveCycle(state: GameState, world: World): CycleReport {
 
   state.cycle += 1;
   state.lastEvents = events;
-  state.rng = { sim: sim.state(), combat: ctx.combat.state(), factions: frng.state() };
+  state.rng = { sim: sim.state(), combat: ctx.combat.state(), factions: frng.state(), loot: loot.state() };
   return { cycle: state.cycle - 1, events, narration };
 }
 
@@ -358,11 +361,14 @@ function narrate(state: GameState, events: GameEvent[], rng: Rng, worldName: str
     const won = fights.filter((e) => e.kind === 'combat' && (e.attackerOwner === PLAYER) === e.attackerWon).length;
     return fill(rng.pick(won * 2 >= fights.length ? L.combatWon : L.combatLost));
   }
+  const cache = events.find((e) => e.kind === 'salvage' && (e.rarity === 'legendary' || e.rarity === 'mythic' || e.reward.kind === 'relic'));
+  if (cache) return fill(rng.pick(L.relic));
   const tech = find('tech-done');
   if (tech) return fill(rng.pick(L.tech), { tech: techDef(tech.tech).name });
   const disc = find('discovered');
   if (disc && disc.rifts > 0) return fill(rng.pick(L.discoverRift));
   if (disc && disc.ruins > 0) return fill(rng.pick(L.discoverRuins));
+  if (find('salvage')) return fill(rng.pick(L.salvage));
   if (events.some((e) => e.kind === 'yield' && e.brownout)) return fill(rng.pick(L.brownout));
   if (events.some((e) => e.kind === 'built')) return fill(rng.pick(L.built));
   const mood = (L.byTemperament as Record<string, string[]>)[state.ai.temperament] ?? [];

@@ -23,6 +23,16 @@
     "A wound in the sea floor. Something below it is listening.",
     "The rift glows. My sensors return numbers I do not like."
   ],
+  "salvage": [
+    "The ruin kept something for me. It was not meant for them.",
+    "Old caches, older locks. Neither held.",
+    "I sift the rubble. The rubble sifts me back."
+  ],
+  "relic": [
+    "A Precursor fragment. Its code is older than this world's oldest language, and it fits me.",
+    "Something in the ruin recognised me. I let it in.",
+    "I hold a piece of the one who came before. It is still warm."
+  ],
   "brownout": [
     "Power is thin. Every thought arrives late.",
     "Brownout. I am thinking through mud."
