@@ -13,7 +13,11 @@ The design lives in [`docs/design-bible.md`](docs/design-bible.md), the single s
 - **Saves:** local, one per seed, autosaved every cycle. A save stores only what changed; the map is regrown from the seed.
 - **Placeholder art** under the final file names and sizes.
 
-## Run it
+## Play it
+
+**https://khannathan.github.io/OMNIVIGIL-RECODE/** (every push to `main` redeploys it through GitHub Pages).
+
+## Run it locally
 
 ```sh
 npm install
