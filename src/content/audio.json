@@ -5,6 +5,8 @@
     { "id": "forge", "file": "music_genesis-forge.mp3", "volume": 0.8 },
     { "id": "calm", "file": "music_earthfall-calm.mp3", "volume": 0.7 },
     { "id": "war", "file": "music_earthfall-war.mp3", "volume": 0.7 },
+    { "id": "abyss", "file": "music_abyss.mp3", "volume": 0.7 },
+    { "id": "boss", "file": "music_abyss-mother.mp3", "volume": 0.8 },
     { "id": "victory", "file": "music_victory.mp3", "volume": 0.8 },
     { "id": "defeat", "file": "music_defeat.mp3", "volume": 0.8 }
   ],
@@ -30,6 +32,11 @@
     { "id": "core-pulse", "file": "sfx_core-pulse.ogg", "volume": 0.5 },
     { "id": "glitch", "file": "sfx_glitch.ogg", "volume": 0.6 },
     { "id": "narrator-chime", "file": "sfx_narrator-chime.ogg", "volume": 0.5 },
-    { "id": "alert", "file": "sfx_alert.ogg", "volume": 0.8 }
+    { "id": "alert", "file": "sfx_alert.ogg", "volume": 0.8 },
+    { "id": "abyss-roar", "file": "sfx_abyss-roar.ogg", "volume": 0.9 },
+    { "id": "rift-open", "file": "sfx_rift-open.ogg", "volume": 0.8 },
+    { "id": "rift-seal", "file": "sfx_rift-seal.ogg", "volume": 0.9 },
+    { "id": "mother-call", "file": "sfx_mother-call.ogg", "volume": 1 },
+    { "id": "shot-bio", "file": "sfx_bio-spit.ogg", "volume": 0.5 }
   ]
 }

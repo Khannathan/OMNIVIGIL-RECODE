@@ -140,10 +140,10 @@ describe('cycle', () => {
 });
 
 describe('M1 content', () => {
-  test('the slice has 4 factions, 3 resources plus Energy, 20 techs and 6 units', () => {
+  test('the slice has 4 factions, 5 resources plus Energy, 31 techs and 6 built units', () => {
     expect(generateWorld(SEEDS[0]).factions).toHaveLength(4);
-    expect(Object.keys(RULES.start).sort()).toEqual(['compute', 'influence', 'matter']);
-    expect(TECHS).toHaveLength(20);
+    expect(Object.keys(RULES.start).sort()).toEqual(['compute', 'crypto', 'essence', 'influence', 'matter']);
+    expect(TECHS).toHaveLength(31);
     expect(PLAYER_UNITS).toHaveLength(6);
   });
   test('every tech prerequisite exists and every unit unlock is a tech', () => {
@@ -252,7 +252,7 @@ describe('research and victory', () => {
     expect(dominionProgress(state).held).toBe(dominionProgress(state).total);
     const report = resolveCycle(state, world);
     expect(report.events.some((e) => e.kind === 'victory')).toBe(true);
-    expect(state.victory?.kind).toBe('dominion');
+    expect(state.victories.map((v) => v.kind)).toEqual(['dominion']);
     const again = resolveCycle(state, world);
     expect(again.events.some((e) => e.kind === 'victory')).toBe(false);
   });

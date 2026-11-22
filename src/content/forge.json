@@ -1,5 +1,5 @@
 {
-  "_doc": "Genesis Forge (lite) for M1: build your AI's core before the run. Each option's effects use the same vocabulary as techs.json. Doctrine goals beyond Dominion arrive in M3; for now each doctrine gives a small edge and colours the narrator.",
+  "_doc": "Genesis Forge (lite) for M1: build your AI's core before the run. Each option's effects use the same vocabulary as techs.json. Each doctrine gives a small edge, colours the narrator, and points the OBJECTIVE at one homeworld victory (rules.json victories.doctrine).",
   "origins": [
     { "id": "military-server", "name": "Military Server", "blurb": "You woke in a hardened bunker rack. Something here was built to fight.",
       "effects": [{ "kind": "startUnit", "unit": "sentinel-trooper" }, { "kind": "upow", "pct": 5 }] },
@@ -38,7 +38,7 @@
     { "id": "conqueror", "name": "Conqueror", "fantasy": "Rule everything",
       "effects": [{ "kind": "yield", "resource": "matter", "flat": 2, "where": "city" }] },
     { "id": "inevitable", "name": "Inevitable", "fantasy": "Infect every network",
-      "effects": [{ "kind": "yield", "resource": "compute", "flat": 2, "where": "city" }, { "kind": "sight", "flat": 1, "domain": "air" }] },
+      "effects": [{ "kind": "yield", "resource": "compute", "flat": 2, "where": "city" }, { "kind": "exposure", "pct": -25 }] },
     { "id": "machine-god", "name": "Machine God", "fantasy": "Be worshipped",
       "effects": [{ "kind": "yield", "resource": "influence", "pct": 50 }, { "kind": "sway", "flat": 4 }] },
     { "id": "assimilator", "name": "Assimilator", "fantasy": "Absorb everything",

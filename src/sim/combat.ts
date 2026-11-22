@@ -7,11 +7,12 @@
 // destroyed. Because the rules are this simple, the forecast is exact: the
 // win chance shown is the true probability the seeded combat roll uses.
 
-import { archetypeDef, RULES, TERRAIN, unitDef } from '../content';
+import { archetypeDef, RULES, strainDef, TERRAIN, unitDef } from '../content';
+import { guardUpow, isRiftGuard, riftGuard } from './abyss';
 import { mods } from './effects';
 import { isEmbarked } from './path';
 import { Rng } from './rng';
-import { factionById, GameState, PLAYER, Structure, structureAt, Unit } from './state';
+import { ABYSS, exposureLevel, factionById, GameState, kaijuReady, PLAYER, Structure, structureAt, symbioteStat, Unit } from './state';
 import { World } from './worldgen';
 
 export interface StrengthLine {
@@ -47,37 +48,66 @@ export interface Forecast {
   defenderHpIfHold: number;
 }
 
-/** UPow for one side of a fight, with every modifier listed. */
-export function sideOf(state: GameState, world: World, unit: Unit, role: 'attack' | 'defense', fightTile: number): Side {
+/** UPow for one side of a fight, with every modifier listed. `foe` is who it fights (for kaiju and Exposure rules). */
+export function sideOf(state: GameState, world: World, unit: Unit, role: 'attack' | 'defense', fightTile: number, foe?: Unit): Side {
   const def = unitDef(unit.type);
   const lines: StrengthLine[] = [];
+  const foeKaiju = !!foe && unitDef(foe.type).kaiju === true;
   let upow = def.upow;
   if (unit.type === WALLS) {
     const s = structureAt(state, unit.tile)!;
     const w = RULES.walls;
     upow = (s.type === 'ai-node' ? w.node : w.city) + w.perStage * s.stage;
+  } else if (isRiftGuard(unit)) {
+    upow = guardUpow(state, unit);
+  }
+  if (unit.type === WALLS) {
+    /* walls have no other modifiers */
   } else if (unit.owner === PLAYER) {
     for (const u of mods(state).upow) {
       if (u.domain && u.domain !== def.domain) continue;
       if (u.role && u.role !== role) continue;
       lines.push({ label: u.source, pct: u.pct });
     }
+    // TBU parts.
+    for (const l of def.lines ?? []) {
+      if (l.role && l.role !== role) continue;
+      if (l.vsKaiju && !foeKaiju) continue;
+      lines.push({ label: l.vsKaiju ? `${l.label} (vs kaiju)` : l.label, pct: l.pct });
+    }
+    // A fused symbiote.
+    if (unit.symbiote) {
+      const st = strainDef(unit.symbiote);
+      if (!st.role || st.role === role) lines.push({ label: `Symbiote: ${st.name}`, pct: symbioteStat(state, unit, 'upowPct') });
+      if (st.vsKaijuPct && foeKaiju) lines.push({ label: `${st.name} (vs kaiju)`, pct: st.vsKaijuPct });
+    }
+  } else if (unit.owner === ABYSS) {
+    const tide = Math.min(RULES.abyss.tideCapPct, Math.floor(state.cycle * RULES.abyss.tidePerCyclePct));
+    if (tide > 0) lines.push({ label: 'Abyssal tide', pct: tide });
+    if (unit.type === 'abyss-mother' && state.mother.retreats > 0) lines.push({ label: `Grown in the deep (×${state.mother.retreats})`, pct: state.mother.retreats * RULES.abyss.motherGrowthPct });
   } else {
     const f = factionById(state, unit.owner);
     const esc = Math.min(RULES.factions.escalationCapPct, Math.floor(state.cycle * RULES.factions.escalationPerCyclePct));
     if (esc > 0) lines.push({ label: 'Native escalation', pct: esc });
     const bonus = f ? archetypeDef(f.archetype).terrainBonus?.[TERRAIN[world.terrain[fightTile]].id] : undefined;
     if (bonus && def.domain === 'land') lines.push({ label: `Home ground (${TERRAIN[world.terrain[fightTile]].name})`, pct: bonus });
+    if (foe?.owner === PLAYER) {
+      const lv = exposureLevel(state.exposure);
+      const hunt = RULES.exposure.natives[lv] ?? 0;
+      if (hunt) lines.push({ label: lv >= 4 ? 'Crusade' : 'Hunting you', pct: hunt });
+    }
   }
+  // Kaiju shrug off conventional arms.
+  if (foeKaiju && unit.owner !== ABYSS && !kaijuReady(unit)) lines.push({ label: 'Kaiju hide', pct: RULES.abyss.kaijuHidePct });
   if (role === 'defense') {
     const terr = TERRAIN[world.terrain[unit.tile]];
     if (def.domain === 'land' && terr.defense) lines.push({ label: terr.name, pct: terr.defense });
     const s = structureAt(state, unit.tile);
     if (s && s.owner === unit.owner && def.domain !== 'air') lines.push({ label: `Fortified in ${s.name}`, pct: RULES.combat.settlementDefensePct });
-    if (isEmbarked(def, world.terrain[unit.tile])) lines.push({ label: 'Embarked', pct: RULES.combat.embarkedDefensePct });
+    if (!def.titan && isEmbarked(def, world.terrain[unit.tile])) lines.push({ label: 'Embarked', pct: RULES.combat.embarkedDefensePct });
   }
   const pct = lines.reduce((a, l) => a + l.pct, 0);
-  const power = Math.max(0.5, upow * (1 + pct / 100));
+  const power = Math.max(0.5, upow * Math.max(0.1, 1 + pct / 100));
   const strength = power * (0.5 + (0.5 * unit.hp) / 100);
   return { unitId: unit.id, type: unit.type, owner: unit.owner, hp: unit.hp, upow, power, strength, lines };
 }
@@ -89,13 +119,13 @@ export function wallsOf(s: Structure): Unit {
   return { id: -s.id, type: WALLS, owner: s.owner, tile: s.tile, route: [], hp: s.hp, attackTile: null };
 }
 
-/** The defender that would meet an attack on this tile: the strongest unit, else the walls. */
-export function bestDefender(state: GameState, world: World, tile: number, attackerOwner: string): Unit | undefined {
+/** The defender that would meet an attack on this tile: the strongest unit, else the walls, else a rift's heart. */
+export function bestDefender(state: GameState, world: World, tile: number, attackerOwner: string, attacker?: Unit): Unit | undefined {
   let best: Unit | undefined;
   let bestS = -1;
   for (const u of state.units) {
     if (u.tile !== tile || u.owner === attackerOwner) continue;
-    const s = sideOf(state, world, u, 'defense', tile).strength;
+    const s = sideOf(state, world, u, 'defense', tile, attacker).strength;
     if (s > bestS || (s === bestS && best && u.id < best.id)) {
       best = u;
       bestS = s;
@@ -104,6 +134,7 @@ export function bestDefender(state: GameState, world: World, tile: number, attac
   if (best) return best;
   const s = structureAt(state, tile);
   if (s && s.owner !== attackerOwner && s.hp > 0) return wallsOf(s);
+  if (attackerOwner !== ABYSS) return riftGuard(state, tile);
   return undefined;
 }
 
@@ -114,8 +145,8 @@ function hit(a: number, d: number): number {
 }
 
 export function forecast(state: GameState, world: World, attacker: Unit, defender: Unit): Forecast {
-  const a = sideOf(state, world, attacker, 'attack', defender.tile);
-  const d = sideOf(state, world, defender, 'defense', defender.tile);
+  const a = sideOf(state, world, attacker, 'attack', defender.tile, defender);
+  const d = sideOf(state, world, defender, 'defense', defender.tile, attacker);
   const p = a.strength / (a.strength + d.strength);
   const attackerHit = hit(a.strength, d.strength);
   const defenderHit = hit(d.strength, a.strength);

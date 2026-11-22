@@ -4,9 +4,10 @@
 // tracers, losers explode with hit-stop and shake, the camera follows the
 // big moments, and Space skips (design bible sections 6 and 17).
 
-import { REWARDS, TERRAIN, unitDef } from '../content';
+import { REWARDS, TERRAIN, titanParts, unitDef, WeaponStyle } from '../content';
+import { guardId, MOTHER, RIFT_HEART } from '../sim/abyss';
 import { hexToPixel, indexToPixel, ROW_STEP, HEX_W, worldPixelWidth, wrapCol } from '../sim/hex';
-import { GameEvent, GameState, PLAYER } from '../sim/state';
+import { ABYSS, GameEvent, GameState, PLAYER } from '../sim/state';
 import { World } from '../sim/worldgen';
 import { Renderer, rgb } from './renderer';
 import { buildTimeline, FightShot, positionAt, Timeline } from './timeline';
@@ -18,9 +19,24 @@ const ENGINE: RGB = [1, 0xb8 / 255, 0x4a / 255];
 const AMBER: RGB = [1, 0xc6 / 255, 0x5a / 255];
 const RIFT: RGB = [1, 0x28 / 255, 0x48 / 255];
 const GOLD: RGB = [1, 0.82, 0.35];
+const BIO: RGB = [0.78, 1, 0.35];
 
 /** Sounds the view asks for while it plays the Watch. */
-export type Cue = 'shot-ballistic' | 'shot-laser' | 'missile' | 'explosion-small' | 'explosion-large' | 'capture' | 'alert' | 'unit-online' | 'core-pulse';
+export type Cue =
+  | 'shot-ballistic'
+  | 'shot-laser'
+  | 'shot-bio'
+  | 'missile'
+  | 'explosion-small'
+  | 'explosion-large'
+  | 'capture'
+  | 'alert'
+  | 'unit-online'
+  | 'core-pulse'
+  | 'abyss-roar'
+  | 'rift-open'
+  | 'rift-seal'
+  | 'mother-call';
 
 export interface ViewOptions {
   showGrid: boolean;
@@ -65,15 +81,31 @@ interface Particle {
 interface Shot {
   at: number;
   fromA: boolean;
-  kind: 'ballistic' | 'laser' | 'shell' | 'missile';
+  kind: WeaponStyle;
 }
+
+function weaponOf(type: string): WeaponStyle {
+  if (type === 'walls') return 'ballistic';
+  const d = unitDef(type);
+  if (d.weapon) return d.weapon;
+  return d.oneShot ? 'missile' : d.domain === 'air' ? 'laser' : d.domain === 'sea' ? 'shell' : 'ballistic';
+}
+
+const SHOT_COLOR: Record<WeaponStyle, RGB> = {
+  ballistic: [1, 0xb8 / 255, 0x4a / 255],
+  laser: [0.37, 0.88, 1],
+  missile: [1, 0.6, 0.25],
+  shell: [1, 0xb8 / 255, 0x4a / 255],
+  bio: [0.78, 1, 0.35],
+  blade: [0.85, 0.95, 1],
+};
 
 /** Every fight is a short exchange of fire, then the loser blows up. */
 function shotsFor(f: FightShot): Shot[] {
   const a = unitDef(f.e.attackerType);
-  const kind: Shot['kind'] = a.oneShot ? 'missile' : a.domain === 'air' ? 'laser' : a.domain === 'sea' ? 'shell' : 'ballistic';
-  if (kind === 'missile') return [{ at: 0.05, fromA: true, kind }];
-  const back: Shot['kind'] = f.e.defenderType === 'walls' ? 'ballistic' : unitDef(f.e.defenderType).domain === 'air' ? 'laser' : 'ballistic';
+  const kind = weaponOf(f.e.attackerType);
+  if (a.oneShot) return [{ at: 0.05, fromA: true, kind: 'missile' }];
+  const back = weaponOf(f.e.defenderType);
   const n = f.big ? 5 : 4;
   const out: Shot[] = [];
   for (let i = 0; i < n; i++) {
@@ -112,7 +144,7 @@ export class GameView {
     const key = owner === PLAYER ? `p:${state.ai.color}` : owner;
     let c = this.colors.get(key);
     if (!c) {
-      const hex = owner === PLAYER ? state.ai.color : state.factions.find((f) => f.id === owner)?.color ?? '#ff3a4a';
+      const hex = owner === PLAYER ? state.ai.color : owner === ABYSS ? '#c8ff5a' : state.factions.find((f) => f.id === owner)?.color ?? '#ff3a4a';
       c = rgb(hex);
       this.colors.set(key, c);
     }
@@ -230,7 +262,7 @@ export class GameView {
     tl.fights.forEach((f, i) => {
       for (const [k, s] of shotsFor(f).entries()) {
         if (!this.once(`f${i}s${k}`, f.t + s.at, from, to)) continue;
-        this.onCue(s.kind === 'missile' ? 'missile' : s.kind === 'laser' ? 'shot-laser' : 'shot-ballistic', f.mine ? 1 : 0.5);
+        this.onCue(s.kind === 'missile' ? 'missile' : s.kind === 'laser' ? 'shot-laser' : s.kind === 'bio' ? 'shot-bio' : 'shot-ballistic', f.mine ? 1 : 0.5);
       }
       if (this.once(`f${i}x`, f.t + f.impact, from, to)) {
         const loserTile = f.e.attackerWon ? f.e.tile : f.e.from;
@@ -282,6 +314,42 @@ export class GameView {
           if (!this.reduceMotion) this.flash = { color: ENEMY, alpha: 0.25 };
           this.addLabel(m.tile, m.kind === 'razed' ? `${m.text} razed` : `${m.text} lost`, 'bad', 2.4, -44);
           this.onCue('alert');
+          break;
+        case 'rise':
+          this.burst(x, y, BIO, 22);
+          this.pillar(x, y, RIFT, 1.1);
+          this.addLabel(m.tile, `${m.text} rises`, 'bad', 2.2, -54);
+          if (!this.reduceMotion) this.trauma = Math.min(1, this.trauma + 0.2);
+          this.onCue('abyss-roar');
+          break;
+        case 'ravaged':
+          this.burst(x, y - 6, BIO, 30);
+          this.explode(x, y - 6, 1.3, RIFT);
+          if (!this.reduceMotion) this.flash = { color: RIFT, alpha: 0.18 };
+          this.addLabel(m.tile, `${m.text} ravaged`, 'bad', 2.4, -48);
+          this.onCue('alert');
+          break;
+        case 'sealed':
+          this.pillar(x, y, [0.37, 0.88, 1], 1.4);
+          this.burst(x, y, [0.37, 0.88, 1], 30);
+          if (!this.reduceMotion) this.flash = { color: [0.37, 0.88, 1], alpha: 0.16 };
+          this.addLabel(m.tile, 'Rift sealed', 'good', 2.6, -52);
+          this.onCue('rift-seal');
+          break;
+        case 'mother':
+        case 'slain':
+          this.explode(x, y - 10, 2.2, RIFT);
+          this.burst(x, y, BIO, 40);
+          if (!this.reduceMotion) {
+            this.trauma = 1;
+            this.flash = { color: m.kind === 'slain' ? GOLD : RIFT, alpha: 0.3 };
+          }
+          this.addLabel(m.tile, m.kind === 'slain' ? 'The Abyss Mother is dead' : 'The Mother retreats', m.kind === 'slain' ? 'gold' : 'good', 3, -64);
+          this.onCue('mother-call');
+          break;
+        case 'essence':
+          this.burst(x, y - 6, [0.37, 0.62, 0.61], 12);
+          this.addLabel(m.tile, m.text, 'essence', 2, -36);
           break;
         case 'salvage': {
           const c = rarityRgb(m.rarity);
@@ -409,6 +477,27 @@ export class GameView {
       for (const x of laps(px)) r.draw('gen:glow', x, py - 6, { scale: 1.6, tint: [0.72, 0.55, 1, a], additive: true });
     }
 
+    // Open rifts breathe; sealed ones are a cold ring. The heart, or the Mother, waits in each open one.
+    const guardGhost = (tile: number) => !!this.tl && (this.tl.ghosts.get(guardId(tile))?.until ?? -1) > this.wt;
+    for (const rift of state.rifts) {
+      if (!state.explored[rift.tile] && !opts.revealAll) continue;
+      const [px, py] = indexToPixel(rift.tile, world);
+      const lit = seen(rift.tile) ? 1 : 0.5;
+      for (const x of laps(px)) {
+        if (rift.sealed) {
+          r.draw('gen:hex-ring', x, py, { scale: 0.7, tint: [0.37, 0.88, 1, 0.35 * lit] });
+          continue;
+        }
+        const k = 0.5 + 0.5 * Math.sin(now * (rift.mother ? 1.3 : 2) + rift.tile);
+        r.draw('gen:glow', x, py, { scale: rift.mother ? 4 : 3, tint: [...RIFT, (0.2 + 0.15 * k) * lit], additive: true });
+        r.draw('gen:glow', x, py - 6, { scale: 1.6, tint: [...BIO, (0.12 + 0.1 * k) * lit], additive: true });
+        if (guardGhost(rift.tile)) continue;
+        const type = rift.mother ? MOTHER : RIFT_HEART;
+        r.draw(`unit_${type}_idle.png`, x, py - 8, { frame: Math.floor(now * 4 + rift.tile), scale: unitDef(type).drawScale ?? 0.5, team: BIO, tint: [lit, lit, lit, 1] });
+        if (rift.hp < 100 && seen(rift.tile)) bar(x, py + 28, rift.hp / 100, RIFT);
+      }
+    }
+
     // Hover, selection and the advisor's pointer.
     const player = this.colorOf(state, PLAYER);
     if (opts.hoverTile !== null && opts.hoverTile >= 0) {
@@ -484,9 +573,14 @@ export class GameView {
       const selected = id === opts.selectedUnit;
       const air = def.domain === 'air' ? -6 + Math.sin(now * 2 + id) * 1.5 : 0;
       const team = selected ? ([1, 1, 1] as RGB) : this.colorOf(state, owner);
+      const scale = def.drawScale ?? 0.75;
+      // Big art stands on the hex rather than floating over it.
+      const lift = def.kaiju || def.titan ? -10 : 0;
       for (const x of laps(px)) {
-        if (owner === PLAYER) r.draw('gen:glow', x + ox, py + oy + air + 6, { scale: 1.1, tint: [...team, 0.18 * alpha], additive: true });
-        r.draw(`unit_${type}_idle.png`, x + ox, py + oy + air, { frame, scale: 0.75, team, tint: [1, 1, 1, alpha] });
+        if (owner === PLAYER) r.draw('gen:glow', x + ox, py + oy + air + 6, { scale: def.titan ? 1.8 : 1.1, tint: [...team, 0.18 * alpha], additive: true });
+        else if (owner === ABYSS) r.draw('gen:glow', x + ox, py + oy + 6, { scale: def.kaiju ? 2.2 : 1.2, tint: [...RIFT, 0.22 * alpha], additive: true });
+        if (def.titan) this.drawTitan(type, x + ox, py + oy + lift, scale, team, alpha, now, id);
+        else r.draw(`unit_${type}_idle.png`, x + ox, py + oy + air + lift, { frame, scale, team, tint: [1, 1, 1, alpha] });
         if (hp < 100) bar(x + ox, py + oy + air + 24, hp / 100, hp > 50 ? [0.37, 0.88, 0.54] : [1, 0.23, 0.29]);
       }
     };
@@ -509,6 +603,13 @@ export class GameView {
     if (watching) {
       for (const [id, g] of this.tl!.ghosts) {
         if (this.wt >= g.until) continue;
+        if (id < 0) {
+          // A rift's heart or the Mother: drawn in its rift until the blow lands.
+          const [px, py] = indexToPixel(g.tile, this.world);
+          const flick = g.until - this.wt < 0.25 ? (Math.floor(now * 30) % 2 ? 0.4 : 1) : 1;
+          for (const x of laps(px)) r.draw(`unit_${g.type}_idle.png`, x, py - 8, { frame: Math.floor(now * 4), scale: unitDef(g.type).drawScale ?? 0.5, team: BIO, tint: [1, 1, 1, flick] });
+          continue;
+        }
         const [px, py] = this.unitPos(id, g.tile);
         const left = g.until - this.wt;
         const flicker = left < 0.25 ? (Math.floor(now * 30) % 2 ? 0.4 : 1) : 1;
@@ -562,7 +663,7 @@ export class GameView {
         const [sx, sy] = s.fromA ? [ax, ay - 6] : [dx, dy - 6];
         const [tx, ty] = s.fromA ? [dx, dy - 6] : [ax, ay - 6];
         const ang = Math.atan2(ty - sy, tx - sx);
-        const color: RGB = s.kind === 'laser' ? [0.37, 0.88, 1] : s.kind === 'missile' ? [1, 0.6, 0.25] : ENGINE;
+        const color: RGB = SHOT_COLOR[s.kind];
         // Muzzle flash.
         if (st < 0.08) {
           for (const x of laps(sx)) {
@@ -573,7 +674,7 @@ export class GameView {
           const k = st / flight;
           const e = s.kind === 'missile' ? k * k : k;
           const px = sx + (tx - sx) * e;
-          const py = sy + (ty - sy) * e - (s.kind === 'missile' || s.kind === 'shell' ? Math.sin(k * Math.PI) * 18 : 0);
+          const py = sy + (ty - sy) * e - (s.kind === 'missile' || s.kind === 'shell' || s.kind === 'bio' ? Math.sin(k * Math.PI) * 18 : 0);
           for (const x of laps(px)) {
             r.draw('fx_tracer.png', x, py, { rotation: ang, scale: s.kind === 'missile' ? 1.4 : 1, tint: [...color, 1], additive: true });
             r.draw('gen:glow', x, py, { scale: s.kind === 'missile' ? 1.2 : 0.6, tint: [...color, 0.7], additive: true });
@@ -586,6 +687,26 @@ export class GameView {
           for (const x of laps(tx)) r.draw('fx_impact.png', x, ty, { frame: Math.min(5, Math.floor(((st - flight) / 0.12) * 6)), scale: 0.45, additive: true });
         }
       }
+    }
+  }
+
+  /** A TBU, layered from its parts' art: back, far arm, legs, core, near arm, head. */
+  private drawTitan(type: string, x: number, y: number, scale: number, team: RGB, alpha: number, now: number, id: number) {
+    const parts = titanParts(type);
+    if (!parts) return;
+    const r = this.r;
+    const bob = Math.round(Math.sin(now * 3 + id) * 1);
+    const s = 128 * scale;
+    const order = ['back', 'armL', 'legs', 'core', 'armR', 'head'] as const;
+    for (const slot of order) {
+      const file = `tbu_${slot === 'armL' || slot === 'armR' ? 'arm' : slot}_${parts[slot].id}.png`;
+      const far = slot === 'armL';
+      const dy = slot === 'legs' ? 0 : bob;
+      r.draw(file, x + (far ? -6 * scale : slot === 'armR' ? 4 * scale : 0), y + dy, {
+        size: far ? [-s, s] : [s, s],
+        team,
+        tint: far ? [0.7, 0.7, 0.75, alpha] : [1, 1, 1, alpha],
+      });
     }
   }
 

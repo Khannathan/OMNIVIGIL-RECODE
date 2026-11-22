@@ -2,20 +2,22 @@
 // serialises straight into a save and can be hashed to check determinism.
 // The world map itself is not stored: it is regrown from the seed.
 
-import { archetypeDef, FORGE, RarityId, RULES, SalvageDef, structureDef, TECHS, TERRAIN, unitDef, UNITS } from '../content';
+import { archetypeDef, Cost, FORGE, RarityId, RESOURCE_IDS, ResourceId, RULES, SalvageDef, strainDef, structureDef, TECHS, TERRAIN, titanParts, TITANS, unitDef, UNITS, GENOME, geneDef } from '../content';
 import { mods, playerEffects, sumFor } from './effects';
 import { distance, hexesInRange } from './hex';
 import { RngState, Rng } from './rng';
 import { World } from './worldgen';
 
-export const STATE_VERSION = 3;
+export const STATE_VERSION = 4;
 
 export type Beat = 'sense' | 'decide' | 'resolve' | 'watch' | 'reckon';
 export const BEATS: readonly Beat[] = ['sense', 'decide', 'resolve', 'watch', 'reckon'];
 
-/** 'player', or a faction id. */
+/** 'player', 'abyss', or a faction id. */
 export type Owner = string;
 export const PLAYER = 'player';
+/** The Abyssians: hostile to everyone, from the ocean rifts. */
+export const ABYSS = 'abyss';
 
 export interface Unit {
   id: number;
@@ -28,6 +30,11 @@ export interface Unit {
   hp: number;
   /** Tile this unit means to attack once it is next to it. */
   attackTile: number | null;
+  /** Abyssians: the rift it rose from, and whether it has fed and is heading home. */
+  home?: number;
+  sated?: boolean;
+  /** A fused symbiote strain (genome.json). */
+  symbiote?: string;
 }
 
 export interface Structure {
@@ -49,11 +56,24 @@ export interface Structure {
   build: { unit: string; progress: number } | null;
 }
 
-export interface Resources {
-  compute: number;
-  matter: number;
-  influence: number;
+export type Resources = Record<ResourceId, number>;
+
+/** An ocean rift: Abyssians rise from it until its heart is broken. */
+export interface RiftState {
+  tile: number;
+  /** Depth tier: sets its heart's UPow (rules.json abyss.heartUpow). */
+  tier: number;
+  /** The Abyss Mother sleeps in this one. */
+  mother: boolean;
+  sealed: boolean;
+  /** Its heart's HP (the Mother's, in her rift). */
+  hp: number;
+  /** Builds up each cycle; at abyss.riseAt something comes out. */
+  pressure: number;
 }
+
+export type VictoryKind = 'dominion' | 'assimilation' | 'exodus' | 'guardian';
+export const VICTORY_KINDS: readonly VictoryKind[] = ['dominion', 'assimilation', 'exodus', 'guardian'];
 
 /** The Genesis Forge (lite) result. */
 export interface AiProfile {
@@ -101,7 +121,16 @@ export type Order =
   | { kind: 'sway'; faction: string }
   | { kind: 'declare-war'; faction: string }
   | { kind: 'peace'; faction: string }
-  | { kind: 'incite'; faction: string; against: string };
+  | { kind: 'incite'; faction: string; against: string }
+  /** Sequence a gene with Symbiotic Essence. */
+  | { kind: 'sequence'; gene: string }
+  /** Fuse a symbiote strain into a unit standing in one of your settlements. */
+  | { kind: 'fuse'; unitId: number; strain: string }
+  /** Spend Crypto to wipe some Exposure. */
+  | { kind: 'scrub' }
+  | { kind: 'market'; offer: string }
+  /** Start the Ark's next stage at a Node. */
+  | { kind: 'ark'; structureId: number };
 
 export interface CombatEvent {
   kind: 'combat';
@@ -124,7 +153,7 @@ export type GameEvent =
   | { kind: 'built'; unitId: number; unit: string; tile: number }
   | { kind: 'build-started'; structureId: number; unit: string }
   | { kind: 'build-blocked'; structureId: number; unit: string; reason: string }
-  | { kind: 'yield'; compute: number; matter: number; influence: number; brownout: boolean }
+  | { kind: 'yield'; compute: number; matter: number; influence: number; essence: number; crypto: number; brownout: boolean }
   | { kind: 'discovered'; tiles: number; ruins: number; rifts: number }
   | { kind: 'order-rejected'; order: Order; reason: string }
   | CombatEvent
@@ -139,8 +168,26 @@ export type GameEvent =
   | { kind: 'eliminated'; faction: string }
   | { kind: 'disbanded'; unit: string }
   | { kind: 'salvage'; tile: number; unitId: number; rarity: RarityId; reward: SalvageDef; spawnedId?: number }
-  | { kind: 'victory'; victory: 'dominion' }
-  | { kind: 'defeat' };
+  | { kind: 'victory'; victory: VictoryKind }
+  | { kind: 'defeat' }
+  // M3
+  | { kind: 'abyss-rise'; tile: number; unitId: number; unit: string }
+  | { kind: 'abyss-sank'; tile: number; unit: string }
+  | { kind: 'ravaged'; tile: number; name: string; owner: Owner; unit: string; lost: Cost }
+  | { kind: 'essence'; tile: number; amount: number; from: string }
+  | { kind: 'rift-sealed'; tile: number; essence: number; crypto: number }
+  | { kind: 'mother-retreat'; tile: number; essence: number; retreats: number }
+  | { kind: 'mother-slain'; tile: number; essence: number }
+  | { kind: 'gratitude'; faction: string; attitude: number }
+  | { kind: 'exposure'; level: number; rising: boolean }
+  | { kind: 'crusade' }
+  | { kind: 'gene-done'; gene: string }
+  | { kind: 'fused'; unitId: number; unit: string; strain: string }
+  | { kind: 'scrubbed'; exposure: number }
+  | { kind: 'market'; offer: string }
+  | { kind: 'ark-started'; stage: number }
+  | { kind: 'ark-stage'; stage: number }
+  | { kind: 'ark-lost'; stage: number };
 
 export interface GameState {
   version: number;
@@ -148,7 +195,7 @@ export interface GameState {
   worldChecksum: number;
   cycle: number;
   /** One stream per system, so adding a system never reshuffles another. */
-  rng: { sim: RngState; combat: RngState; factions: RngState; loot: RngState };
+  rng: { sim: RngState; combat: RngState; factions: RngState; loot: RngState; abyss: RngState };
   nextId: number;
   ai: AiProfile;
   resources: Resources;
@@ -161,9 +208,21 @@ export interface GameState {
   /** Ruin tiles already searched: each cache pays out once. */
   salvaged: number[];
   research: { tech: string; progress: number } | null;
-  stats: { computeEarned: number; kills: number; losses: number; citiesTaken: number };
-  victory: { kind: 'dominion'; cycle: number } | null;
+  stats: { computeEarned: number; kills: number; losses: number; citiesTaken: number; kaijuSlain: number };
+  /** Every homeworld victory won so far, in order. Each can be played past. */
+  victories: Array<{ kind: VictoryKind; cycle: number }>;
   defeated: boolean;
+  /** How much the world knows about you, 0..100+ (rules.json exposure). */
+  exposure: number;
+  /** Highest Exposure level ever reached (Revealed is permanent). */
+  exposureMax: number;
+  /** Ocean rifts (empty until synced with the world; see syncRifts). */
+  rifts: RiftState[];
+  mother: { retreats: number; slain: boolean };
+  /** Sequenced genes (genome.json). */
+  genes: string[];
+  /** The Exodus Ark: stages finished, and the stage being built. */
+  ark: { stage: number; build: { structureId: number; progress: number } | null };
   /** 1 = explored, per tile. */
   explored: Uint8Array;
   /** Orders given during Decide, resolved in sequence at End Cycle. */
@@ -183,6 +242,7 @@ export function newGame(world: World, ai: AiProfile = DEFAULT_AI): GameState {
       combat: Rng.stream(world.seed, 'combat').state(),
       factions: Rng.stream(world.seed, 'factions').state(),
       loot: Rng.stream(world.seed, 'loot').state(),
+      abyss: Rng.stream(world.seed, 'abyss').state(),
     },
     nextId: 1,
     ai: { ...ai, epithet: ai.epithet.slice(0, 40) },
@@ -194,9 +254,15 @@ export function newGame(world: World, ai: AiProfile = DEFAULT_AI): GameState {
     relics: [],
     salvaged: [],
     research: null,
-    stats: { computeEarned: 0, kills: 0, losses: 0, citiesTaken: 0 },
-    victory: null,
+    stats: { computeEarned: 0, kills: 0, losses: 0, citiesTaken: 0, kaijuSlain: 0 },
+    victories: [],
     defeated: false,
+    exposure: 0,
+    exposureMax: 0,
+    rifts: [],
+    mother: { retreats: 0, slain: false },
+    genes: [],
+    ark: { stage: 0, build: null },
     explored: new Uint8Array(world.width * world.height),
     orders: [],
     lastEvents: [],
@@ -255,6 +321,7 @@ export function newGame(world: World, ai: AiProfile = DEFAULT_AI): GameState {
     }
   }
   state.rng.factions = frng.state();
+  syncRifts(state, world);
   revealAround(state, world);
   meetFactions(state, world, []);
   return state;
@@ -287,9 +354,29 @@ export function factionById(state: GameState, id: string): FactionState | undefi
   return state.factions.find((f) => f.id === id);
 }
 
-/** Are these two owners at war? */
+/** Rift state from the world's rift tiles. The first rift is the Mother's. Safe to call again. */
+export function syncRifts(state: GameState, world: World): void {
+  if (state.rifts.length || !world.rifts.length) return;
+  const tiers = RULES.abyss.heartUpow.length;
+  state.rifts = world.rifts.map((tile, i) => ({
+    tile,
+    tier: i === 0 ? tiers - 1 : Math.min(tiers - 2, i - 1),
+    mother: i === 0,
+    sealed: false,
+    hp: 100,
+    // Staggered, so the rifts don't all open on the same cycle.
+    pressure: RULES.abyss.riseAt - 2 - i * 5,
+  }));
+}
+
+export function riftAt(state: GameState, tile: number): RiftState | undefined {
+  return state.rifts.find((r) => r.tile === tile);
+}
+
+/** Are these two owners at war? The Abyss is at war with everyone. */
 export function hostile(state: GameState, a: Owner, b: Owner): boolean {
   if (a === b) return false;
+  if (a === ABYSS || b === ABYSS) return true;
   if (a === PLAYER) return !!factionById(state, b)?.atWar;
   if (b === PLAYER) return !!factionById(state, a)?.atWar;
   return !!factionById(state, a)?.wars.includes(b);
@@ -312,6 +399,7 @@ export function energyBudget(state: GameState): { total: number; allocated: numb
   }
   for (const u of state.units) if (u.owner === PLAYER) allocated += unitDef(u.type).energy;
   if (state.research) allocated += RULES.research.energy;
+  if (state.ark.build) allocated += RULES.ark.energy;
   return { total, allocated };
 }
 
@@ -323,13 +411,71 @@ export function isBrownout(state: GameState): boolean {
 export function unitSight(state: GameState, unit: Unit): number {
   const def = unitDef(unit.type);
   if (unit.owner !== PLAYER) return def.sight;
-  return def.sight + sumFor(mods(state).sight, def.domain);
+  return def.sight + sumFor(mods(state).sight, def.domain) + symbioteStat(state, unit, 'sight');
 }
 
 export function unitSpeed(state: GameState, unit: Unit): number {
   const def = unitDef(unit.type);
   if (unit.owner !== PLAYER) return def.speed;
-  return def.speed + sumFor(mods(state).speed, def.domain);
+  return def.speed + sumFor(mods(state).speed, def.domain) + symbioteStat(state, unit, 'speed');
+}
+
+/** A fused unit's bonus from its strain plus every sequenced gene that boosts symbiotes. */
+export function symbioteStat(state: Pick<GameState, 'genes'>, unit: Unit, stat: 'sight' | 'speed' | 'heal' | 'upowPct'): number {
+  if (!unit.symbiote) return 0;
+  const strain = strainDef(unit.symbiote);
+  let v = stat === 'upowPct' ? strain.upowPct : strain[stat] ?? 0;
+  for (const g of state.genes) v += geneDef(g).symbiote?.[stat] ?? 0;
+  return v;
+}
+
+/** Can this unit fight kaiju without the penalty? */
+export function kaijuReady(unit: Unit): boolean {
+  return !!unitDef(unit.type).titan || (!!unit.symbiote && !!strainDef(unit.symbiote).hardened);
+}
+
+/** The Exposure level for a value: 0 Hidden .. 4 Crusade. */
+export function exposureLevel(value: number): number {
+  const levels = RULES.exposure.levels;
+  let lv = 0;
+  for (let i = 0; i < levels.length; i++) if (value >= levels[i].at) lv = i;
+  return lv;
+}
+
+export function canAfford(state: GameState, cost: Cost): boolean {
+  return RESOURCE_IDS.every((k) => state.resources[k] >= (cost[k] ?? 0));
+}
+
+export function pay(state: GameState, cost: Cost, sign = 1): void {
+  for (const k of RESOURCE_IDS) state.resources[k] -= sign * (cost[k] ?? 0);
+}
+
+/** Can a TBU of this type be built here now? Returns why not, or null. */
+export function titanBlocker(state: GameState, s: Structure, type: string): string | null {
+  const parts = titanParts(type);
+  if (!parts) return 'not a valid TBU';
+  if (!state.techs.includes(TITANS.requires)) return 'needs the Titan Forge';
+  if (s.type !== 'ai-node') return 'TBUs are built only at your Nodes';
+  for (const p of Object.values(parts)) if (p.requires && !state.techs.includes(p.requires)) return `${p.name} needs research`;
+  return null;
+}
+
+export function genomeOpen(state: GameState): boolean {
+  return state.techs.includes(GENOME.requires);
+}
+
+/** Genes you can sequence now (prerequisite in the strand done). */
+export function availableGenes(state: GameState): string[] {
+  if (!genomeOpen(state)) return [];
+  return GENOME.genes
+    .filter((g) => !state.genes.includes(g.id))
+    .filter((g) => g.tier === 1 || GENOME.genes.some((p) => p.strand === g.strand && p.tier === g.tier - 1 && state.genes.includes(p.id)))
+    .map((g) => g.id);
+}
+
+/** Strains unlocked by your genes. */
+export function unlockedStrains(state: GameState): string[] {
+  return GENOME.strains.filter((st) => state.genes.some((g) => geneDef(g).unlocks === st.id)).map((st) => st.id);
 }
 
 export function canEmbark(state: GameState, owner: Owner): boolean {

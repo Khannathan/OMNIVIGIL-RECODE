@@ -2,18 +2,24 @@
 // sections 8 and 17). Pure functions of the state: no randomness, no DOM.
 // The UI phrases each piece of advice in the AI's own voice (advisor.json).
 
-import { ADVISOR, FORGE, RULES, structureDef, techDef, unitDef, UnitDef } from '../content';
+import { ADVISOR, FORGE, geneDef, RULES, strainDef, structureDef, techDef, unitDef, UnitDef } from '../content';
 import { routeToStrike } from './actions';
 import { bestDefender, forecast } from './combat';
 import { orderKey } from './cycle';
 import { distance, neighbors } from './hex';
 import { findPath } from './path';
+import { exposureFloor } from './exposure';
+import { forgeOpen, strongestTitan } from './titans';
+import { doctrineVictory, victoryProgress } from './victory';
 import {
+  ABYSS,
+  availableGenes,
   availableTechs,
   buildableUnits,
+  canAfford,
   canEmbark,
-  dominionProgress,
   energyBudget,
+  exposureLevel,
   factionById,
   GameState,
   hostile,
@@ -22,6 +28,8 @@ import {
   Structure,
   structureAt,
   Unit,
+  unlockedStrains,
+  VictoryKind,
 } from './state';
 import { World } from './worldgen';
 
@@ -30,8 +38,10 @@ export type AdviceAction =
   | { kind: 'order'; order: Order; unitId?: number; tile?: number }
   /** Look at something: select a unit or a tile. */
   | { kind: 'focus'; tile: number; unitId?: number }
-  | { kind: 'sheet'; sheet: 'tech' | 'factions' }
+  | { kind: 'sheet'; sheet: SheetId }
   | { kind: 'end-cycle' };
+
+export type SheetId = 'tech' | 'factions' | 'forge' | 'genome' | 'ops';
 
 export interface Advice {
   /** Key into advisor.json lines. */
@@ -77,7 +87,8 @@ function spareEnergy(state: GameState): number {
     const s = state.structures.find((x) => x.id === o.structureId);
     if (s && !s.build) queuedBuilds += structureDef(s.type).buildEnergy + unitDef(o.unit).energy;
   }
-  return e.total - e.allocated - queuedResearch - queuedBuilds;
+  const queuedArk = !state.ark.build && isQueued(state, 'ark') ? RULES.ark.energy : 0;
+  return e.total - e.allocated - queuedResearch - queuedBuilds - queuedArk;
 }
 
 function atWar(state: GameState): boolean {
@@ -112,6 +123,8 @@ export function suggestTech(state: GameState): string | null {
         if (e.kind === 'research') score += 1;
       }
       if (t.blurb.startsWith('Unlocks') && !war) score += 1;
+      if (kaijuKnown(state) && (t.id === 'titan-forge' || (!state.techs.includes('titan-forge') && techDef('titan-forge').requires.includes(t.id)))) score += 8;
+      if (t.id === 'gene-splicing' && state.resources.essence >= 15) score += 4;
       return { t, score };
     })
     .sort((a, b) => b.score - a.score || a.t.id.localeCompare(b.t.id));
@@ -135,6 +148,11 @@ export function suggestUnit(state: GameState, world: World, s: Structure): UnitD
   const fighters = options.filter((o) => o.attack && !o.oneShot);
   const pool = fighters.length ? fighters : options;
   return [...pool].sort((a, b) => b.upow - a.upow || a.id.localeCompare(b.id))[0];
+}
+
+/** Have you seen an Abyssian, or did one rise where you could see it? */
+export function kaijuKnown(state: GameState): boolean {
+  return state.units.some((u) => u.owner === ABYSS && state.explored[u.tile]) || state.stats.kaijuSlain > 0;
 }
 
 /** Matter already promised to builds queued this cycle. */
@@ -173,7 +191,7 @@ export function advise(state: GameState, world: World): Advice[] {
     const defenders = state.units.filter((u) => u.owner === PLAYER && unitDef(u.type).attack && distance(u.tile, enemy.tile, world) === 1 && !isQueued(state, `unit:${u.id}`));
     let best: { u: Unit; odds: number } | null = null;
     for (const u of defenders) {
-      const d = bestDefender(state, world, enemy.tile, PLAYER);
+      const d = bestDefender(state, world, enemy.tile, PLAYER, u);
       if (!d) continue;
       const odds = forecast(state, world, u, d).winChance;
       if (!best || odds > best.odds) best = { u, odds };
@@ -208,7 +226,7 @@ export function advise(state: GameState, world: World): Advice[] {
     if (u.owner !== PLAYER || !unitDef(u.type).attack || u.attackTile !== null || isQueued(state, `unit:${u.id}`)) continue;
     let found = false;
     for (const t of neighbors(u.tile, world).sort((a, b) => a - b)) {
-      const d = bestDefender(state, world, t, PLAYER);
+      const d = bestDefender(state, world, t, PLAYER, u);
       if (!d || !hostile(state, PLAYER, d.owner)) continue;
       const odds = forecast(state, world, u, d).winChance;
       if (odds >= 0.65) {
@@ -247,6 +265,71 @@ export function advise(state: GameState, world: World): Advice[] {
       act: { kind: 'order', order: { kind: 'build', structureId: s.id, unit: pick.id }, tile: s.tile },
     });
     break;
+  }
+
+  // 5b. Kaiju about: build a TBU at an idle Node.
+  if (forgeOpen(state) && kaijuKnown(state)) {
+    const titans = state.units.filter((u) => u.owner === PLAYER && unitDef(u.type).titan).length;
+    const building = state.structures.some((s) => s.owner === PLAYER && s.build && unitDef(s.build.unit).titan);
+    const node = idleSettlements(state).find((s) => s.type === 'ai-node');
+    if (titans < 2 && !building && node) {
+      const type = strongestTitan(state, state.resources.matter - queuedMatter(state));
+      const def = type ? unitDef(type) : null;
+      if (def && def.energy + structureBuildEnergy(node) <= spareEnergy(state)) {
+        out.push({
+          id: 'titan', priority: 62, now: `Build a TBU in ${node.name}`, verb: `Build ${def.name}`,
+          vars: { unit: def.name, node: node.name, upow: String(def.upow) },
+          act: { kind: 'order', order: { kind: 'build', structureId: node.id, unit: type! }, tile: node.tile },
+        });
+      } else {
+        out.push({ id: 'titan-forge', priority: 30, now: 'Design a TBU', verb: 'Open the Titan Forge', vars: {}, act: { kind: 'sheet', sheet: 'forge' } });
+      }
+    }
+  }
+
+  // 5c. Exposure climbing: scrub it.
+  const X = RULES.exposure;
+  if (exposureLevel(state.exposure + X.scrubAmount) >= 3 && state.exposure - X.scrubAmount >= exposureFloor(state) && state.resources.crypto >= X.scrubCost && !isQueued(state, 'scrub')) {
+    out.push({
+      id: 'scrub', priority: 58, now: 'Scrub your traces', verb: `Scrub (${X.scrubCost} Crypto)`,
+      vars: { exposure: String(Math.floor(state.exposure)) }, act: { kind: 'order', order: { kind: 'scrub' } },
+    });
+  }
+
+  // 5d. Essence to spend: sequence a gene, or fuse a symbiote.
+  const genes = availableGenes(state)
+    .map(geneDef)
+    .filter((g) => g.cost <= state.resources.essence && !isQueued(state, `gene:${g.id}`))
+    .sort((a, b) => a.cost - b.cost || a.id.localeCompare(b.id));
+  if (genes.length && !state.orders.some((o) => o.kind === 'sequence')) {
+    out.push({
+      id: 'gene', priority: 45, now: 'Sequence a gene', verb: `Sequence ${genes[0].name}`,
+      vars: { gene: genes[0].name, essence: String(state.resources.essence) }, act: { kind: 'order', order: { kind: 'sequence', gene: genes[0].id } },
+    });
+  } else {
+    const strains = unlockedStrains(state).map(strainDef).filter((st) => st.cost <= state.resources.essence).sort((a, b) => b.upowPct - a.upowPct || a.id.localeCompare(b.id));
+    const host = state.units
+      .filter((u) => u.owner === PLAYER && !u.symbiote && unitDef(u.type).attack && !unitDef(u.type).oneShot && structureAt(state, u.tile)?.owner === PLAYER && !isQueued(state, `fuse:${u.id}`))
+      .sort((a, b) => unitDef(b.type).upow - unitDef(a.type).upow || a.id - b.id)[0];
+    if (strains.length && host && !state.orders.some((o) => o.kind === 'fuse')) {
+      out.push({
+        id: 'fuse', priority: 44, now: `Fuse a symbiote into your ${unitDef(host.type).name}`, verb: `Fuse ${strains[0].name}`,
+        vars: { unit: unitDef(host.type).name, strain: strains[0].name },
+        act: { kind: 'order', order: { kind: 'fuse', unitId: host.id, strain: strains[0].id }, unitId: host.id, tile: host.tile },
+      });
+    }
+  }
+
+  // 5e. The Ark, for an Exodus.
+  const stage = RULES.ark.stages[state.ark.stage];
+  if (stage && !state.ark.build && !isQueued(state, 'ark') && state.techs.includes(stage.requires) && canAfford(state, stage.cost)) {
+    const node = settlementsOf(state).find((s) => s.type === 'ai-node');
+    if (node && RULES.ark.energy <= spareEnergy(state)) {
+      out.push({
+        id: 'ark', priority: doctrineVictory(state) === 'exodus' ? 64 : 42, now: `Build the Ark: ${stage.name}`, verb: `Start ${stage.name}`,
+        vars: { stage: stage.name, n: String(state.ark.stage + 1) }, act: { kind: 'order', order: { kind: 'ark', structureId: node.id }, tile: node.tile },
+      });
+    }
   }
 
   // 6. A faction about to snap.
@@ -349,8 +432,8 @@ export const PHASES = ['Earthfall', 'Sunreach', 'Starward', 'Intercontinuum'] as
 export interface Goals {
   /** This cycle: decisions still open. */
   now: string[];
-  /** This phase. */
-  objective: { title: string; held: number; total: number; won: boolean; next: CapitalTarget | null };
+  /** This phase: your doctrine's homeworld victory. */
+  objective: { kind: VictoryKind; title: string; held: number; total: number; won: boolean; status: string; next: CapitalTarget | null };
   /** The run. */
   ambition: { doctrine: string; fantasy: string; text: string; phase: number };
 }
@@ -359,11 +442,12 @@ export function goals(state: GameState, world: World, advice = advise(state, wor
   const now = advice.filter((a) => a.priority >= 50).map((a) => a.now);
   const idle = idleUnits(state).length;
   if (idle > 1 && !now.some((n) => n.startsWith('Scout') || n.startsWith('Search'))) now.push(`${idle} units await orders`);
-  const d = dominionProgress(state);
+  const kind = doctrineVictory(state);
+  const v = victoryProgress(state, kind);
   const doc = FORGE.doctrines.find((o) => o.id === state.ai.doctrine) ?? FORGE.doctrines[0];
   return {
     now: now.length ? now : ['End the cycle'],
-    objective: { title: 'Dominion', held: d.held, total: d.total, won: !!state.victory, next: nextCapital(state, world) },
+    objective: { kind, title: v.title, held: v.held, total: v.total, won: v.won, status: v.status, next: kind === 'dominion' ? nextCapital(state, world) : null },
     ambition: {
       doctrine: doc.name,
       fantasy: doc.fantasy ?? '',

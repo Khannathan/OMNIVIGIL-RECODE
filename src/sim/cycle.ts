@@ -8,20 +8,26 @@
 // is what online play will need later.
 
 import narratorData from '../content/narrator.json';
-import { RULES, structureDef, techDef, TERRAIN, unitDef } from '../content';
+import { geneDef, RESOURCE_IDS, RULES, strainDef, structureDef, techDef, TERRAIN, unitDef } from '../content';
+import { abyssPhase, guardId } from './abyss';
 import { actUnit, Ctx, declareWar, makePeace, removeUnit, routeToStrike } from './actions';
 import { mods } from './effects';
+import { addExposure, crusade, exposureFloor, exposurePhase } from './exposure';
 import { diplomacyPhase, eliminationPhase, factionPhase } from './factions';
 import { hexesInRange } from './hex';
 import { findPath } from './path';
 import { Rng } from './rng';
 import { salvagePhase } from './rewards';
+import { victoryPhase } from './victory';
 import {
+  ABYSS,
+  availableGenes,
   availableTechs,
   buildableUnits,
+  canAfford,
   canEmbark,
   clampAttitude,
-  dominionProgress,
+  exposureLevel,
   factionById,
   GameEvent,
   GameState,
@@ -29,12 +35,19 @@ import {
   isBrownout,
   meetFactions,
   Order,
+  pay,
   PLAYER,
+  Resources,
   revealAround,
+  riftAt,
   spawnUnit,
   structureAt,
   structureById,
+  symbioteStat,
+  syncRifts,
+  titanBlocker,
   unitById,
+  unlockedStrains,
   workRadius,
 } from './state';
 import { World } from './worldgen';
@@ -69,16 +82,29 @@ export function orderKey(o: Order): string {
       return `stance:${o.faction}`;
     case 'incite':
       return `incite:${o.faction}`;
+    case 'sequence':
+      return `gene:${o.gene}`;
+    case 'fuse':
+      return `fuse:${o.unitId}`;
+    case 'scrub':
+      return 'scrub';
+    case 'market':
+      return `market:${o.offer}`;
+    case 'ark':
+      return 'ark';
   }
 }
 
 /** Resolve + Reckon. Mutates state and returns what happened. */
 export function resolveCycle(state: GameState, world: World): CycleReport {
   const events: GameEvent[] = [];
+  syncRifts(state, world);
   const sim = Rng.restore(state.rng.sim);
   const frng = Rng.restore(state.rng.factions);
+  const arng = Rng.restore(state.rng.abyss);
   const ctx: Ctx = { state, world, events, combat: Rng.restore(state.rng.combat), acted: new Set() };
   const m = mods(state);
+  const exposureBefore = exposureLevel(state.exposure);
 
   // 1. Your orders, in the order they were given.
   for (const order of state.orders) applyOrder(ctx, order);
@@ -92,8 +118,9 @@ export function resolveCycle(state: GameState, world: World): CycleReport {
     if (state.units.includes(unit)) actUnit(ctx, unit);
   }
 
-  // 3. The factions answer.
+  // 3. The factions answer, then the Abyss rises.
   factionPhase(ctx, frng);
+  abyssPhase(ctx, arng);
 
   // 4. Production.
   for (const s of state.structures) {
@@ -115,6 +142,24 @@ export function resolveCycle(state: GameState, world: World): CycleReport {
       state.techs.push(r.tech);
       events.push({ kind: 'tech-done', tech: r.tech });
       state.research = null;
+      addExposure(state, RULES.exposure.techDone);
+    }
+  }
+
+  // 5b. The Ark.
+  if (state.ark.build) {
+    const b = state.ark.build;
+    const s = structureById(state, b.structureId);
+    if (!s || s.owner !== PLAYER) {
+      events.push({ kind: 'ark-lost', stage: state.ark.stage + 1 });
+      state.ark.build = null;
+    } else {
+      b.progress = round2(b.progress + rate * (1 + m.build / 100));
+      if (b.progress >= RULES.ark.stages[state.ark.stage].cycles) {
+        state.ark.stage++;
+        state.ark.build = null;
+        events.push({ kind: 'ark-stage', stage: state.ark.stage });
+      }
     }
   }
 
@@ -124,40 +169,40 @@ export function resolveCycle(state: GameState, world: World): CycleReport {
     if (ctx.acted.has(u.id) || u.hp >= 100) continue;
     const home = structureAt(state, u.tile);
     let h = home && home.owner === u.owner ? RULES.heal.inSettlement : RULES.heal.base;
-    if (u.owner === PLAYER) h += heal;
+    if (u.owner === PLAYER) h += heal + (unitDef(u.type).heal ?? 0) + symbioteStat(state, u, 'heal');
     u.hp = Math.min(100, u.hp + h);
   }
   for (const s of state.structures) {
     if (!ctx.acted.has(-s.id)) s.hp = Math.min(100, s.hp + RULES.walls.healPerCycle);
   }
+  for (const r of state.rifts) {
+    if (!r.sealed && !ctx.acted.has(guardId(r.tile))) r.hp = Math.min(100, r.hp + RULES.abyss.heartHealPerCycle);
+  }
 
   // 7. Yields from worked hexes (each hex counts once).
   const after = mods(state);
   const worked = new Set<number>();
-  let compute = 0;
-  let matter = 0;
-  let influence = 0;
+  const y: Resources = { compute: 0, matter: 0, influence: 0, essence: 0, crypto: 0 };
   for (const s of state.structures) {
     if (s.owner !== PLAYER) continue;
     for (const t of hexesInRange(s.tile, workRadius(state, s), world)) worked.add(t);
     const where = s.type === 'ai-node' ? 'node' : 'city';
-    compute += after.yieldFlat[where].compute;
-    matter += after.yieldFlat[where].matter;
-    influence += after.yieldFlat[where].influence + RULES.influence[where];
+    for (const k of RESOURCE_IDS) y[k] += after.yieldFlat[where][k];
+    y.influence += RULES.influence[where];
+    y.crypto += RULES.crypto[where];
   }
   for (const t of worked) {
-    const y = TERRAIN[world.terrain[t]].yields;
-    compute += y.compute;
-    matter += y.matter;
+    const ty = TERRAIN[world.terrain[t]].yields;
+    y.compute += ty.compute;
+    y.matter += ty.matter;
   }
-  compute = Math.floor(compute * (1 + after.yieldPct.compute / 100) * rate);
-  matter = Math.floor(matter * (1 + after.yieldPct.matter / 100) * rate);
-  influence = Math.floor(influence * (1 + after.yieldPct.influence / 100) * rate);
-  state.resources.compute += compute;
-  state.resources.matter += matter;
-  state.resources.influence += influence;
-  state.stats.computeEarned += compute;
-  events.push({ kind: 'yield', compute, matter, influence, brownout });
+  for (const u of state.units) if (u.owner === PLAYER && u.symbiote) y.influence += strainDef(u.symbiote).influence ?? 0;
+  for (const k of RESOURCE_IDS) {
+    y[k] = Math.floor(y[k] * (1 + after.yieldPct[k] / 100) * rate);
+    state.resources[k] += y[k];
+  }
+  state.stats.computeEarned += y.compute;
+  events.push({ kind: 'yield', ...y, brownout });
 
   // 8. Growth: Nodes grow with Compute earned, cities with time.
   const stages = RULES.growth.nodeStageComputeEarned;
@@ -178,6 +223,7 @@ export function resolveCycle(state: GameState, world: World): CycleReport {
   eliminationPhase(ctx);
 
   // 10. Discovery and first contact.
+  if (after.revealRifts) for (const t of world.rifts) state.explored[t] = 1;
   const fresh = revealAround(state, world);
   if (fresh.length) {
     const ruinSet = new Set(world.ruins);
@@ -193,14 +239,9 @@ export function resolveCycle(state: GameState, world: World): CycleReport {
   const loot = Rng.restore(state.rng.loot);
   salvagePhase(state, world, events, loot);
 
-  // 11. Endings. Victory can be played past.
-  if (!state.victory) {
-    const d = dominionProgress(state);
-    if (d.total > 0 && d.held === d.total) {
-      state.victory = { kind: 'dominion', cycle: state.cycle };
-      events.push({ kind: 'victory', victory: 'dominion' });
-    }
-  }
+  // 11. Exposure, then endings. Every victory can be played past.
+  exposurePhase(state, events, exposureBefore);
+  victoryPhase(state, events);
   if (!state.defeated && !state.structures.some((s) => s.owner === PLAYER)) {
     state.defeated = true;
     events.push({ kind: 'defeat' });
@@ -211,7 +252,7 @@ export function resolveCycle(state: GameState, world: World): CycleReport {
 
   state.cycle += 1;
   state.lastEvents = events;
-  state.rng = { sim: sim.state(), combat: ctx.combat.state(), factions: frng.state(), loot: loot.state() };
+  state.rng = { sim: sim.state(), combat: ctx.combat.state(), factions: frng.state(), loot: loot.state(), abyss: arng.state() };
   return { cycle: state.cycle - 1, events, narration };
 }
 
@@ -258,14 +299,22 @@ function applyOrder(ctx: Ctx, order: Order): void {
     case 'build': {
       const s = structureById(state, order.structureId);
       if (!s || s.owner !== PLAYER) return reject('no such settlement');
-      const def = unitDef(order.unit);
+      let def;
+      try {
+        def = unitDef(order.unit);
+      } catch {
+        return reject('unknown unit');
+      }
       if (s.build) return reject('already building');
-      if (!buildableUnits(state, world, s).includes(def.id)) return reject(`${def.name} is not available there`);
-      if (state.resources.matter < def.cost.matter) {
-        events.push({ kind: 'build-blocked', structureId: s.id, unit: def.id, reason: 'not enough Matter' });
+      if (def.titan) {
+        const why = titanBlocker(state, s, def.id);
+        if (why) return reject(why);
+      } else if (!buildableUnits(state, world, s).includes(def.id)) return reject(`${def.name} is not available there`);
+      if (!canAfford(state, def.cost)) {
+        events.push({ kind: 'build-blocked', structureId: s.id, unit: def.id, reason: 'not enough resources' });
         return;
       }
-      state.resources.matter -= def.cost.matter;
+      pay(state, def.cost);
       s.build = { unit: def.id, progress: 0 };
       events.push({ kind: 'build-started', structureId: s.id, unit: def.id });
       return;
@@ -273,7 +322,7 @@ function applyOrder(ctx: Ctx, order: Order): void {
     case 'cancel-build': {
       const s = structureById(state, order.structureId);
       if (!s || !s.build || s.owner !== PLAYER) return reject('nothing to cancel');
-      state.resources.matter += unitDef(s.build.unit).cost.matter;
+      pay(state, unitDef(s.build.unit).cost, -1);
       s.build = null;
       return;
     }
@@ -305,6 +354,7 @@ function applyOrder(ctx: Ctx, order: Order): void {
     case 'peace': {
       const f = factionById(state, order.faction);
       if (!f || !f.atWar) return reject('not at war');
+      if (crusade(state)) return reject('the Crusade will not talk');
       if (f.attitude < D.peaceMinAttitude) return reject(`${f.name} will not talk yet`);
       if (state.resources.influence < D.peaceCost) return reject('not enough Influence');
       state.resources.influence -= D.peaceCost;
@@ -323,6 +373,62 @@ function applyOrder(ctx: Ctx, order: Order): void {
       declareWar(state, events, f.id, g.id, PLAYER);
       return;
     }
+    case 'sequence': {
+      if (!availableGenes(state).includes(order.gene)) return reject('that gene is not available');
+      const g = geneDef(order.gene);
+      if (state.resources.essence < g.cost) return reject('not enough Symbiotic Essence');
+      state.resources.essence -= g.cost;
+      state.genes.push(g.id);
+      events.push({ kind: 'gene-done', gene: g.id });
+      return;
+    }
+    case 'fuse': {
+      const unit = unitById(state, order.unitId);
+      if (!unit || unit.owner !== PLAYER) return reject('no such unit');
+      if (unit.symbiote) return reject('that unit already carries a symbiote');
+      const def = unitDef(unit.type);
+      if (!def.attack || def.oneShot) return reject(`${def.name} cannot host a symbiote`);
+      const home = structureAt(state, unit.tile);
+      if (!home || home.owner !== PLAYER) return reject('fuse it in one of your settlements');
+      if (!unlockedStrains(state).includes(order.strain)) return reject('that strain is not sequenced');
+      const st = strainDef(order.strain);
+      if (state.resources.essence < st.cost) return reject('not enough Symbiotic Essence');
+      state.resources.essence -= st.cost;
+      unit.symbiote = st.id;
+      events.push({ kind: 'fused', unitId: unit.id, unit: unit.type, strain: st.id });
+      return;
+    }
+    case 'scrub': {
+      const X = RULES.exposure;
+      if (state.resources.crypto < X.scrubCost) return reject('not enough Crypto');
+      if (state.exposure <= exposureFloor(state)) return reject('nothing left to scrub');
+      state.resources.crypto -= X.scrubCost;
+      state.exposure = Math.max(exposureFloor(state), Math.round((state.exposure - X.scrubAmount) * 100) / 100);
+      events.push({ kind: 'scrubbed', exposure: state.exposure });
+      return;
+    }
+    case 'market': {
+      const offer = RULES.market.offers.find((o) => o.id === order.offer);
+      if (!offer) return reject('no such offer');
+      if (!canAfford(state, offer.give)) return reject('not enough Crypto');
+      pay(state, offer.give);
+      pay(state, offer.get, -1);
+      events.push({ kind: 'market', offer: offer.id });
+      return;
+    }
+    case 'ark': {
+      const s = structureById(state, order.structureId);
+      if (!s || s.owner !== PLAYER || s.type !== 'ai-node') return reject('the Ark is built at one of your Nodes');
+      if (state.ark.build) return reject('an Ark stage is already being built');
+      const stage = RULES.ark.stages[state.ark.stage];
+      if (!stage) return reject('the Ark is finished');
+      if (!state.techs.includes(stage.requires)) return reject(`needs ${techDef(stage.requires).name}`);
+      if (!canAfford(state, stage.cost)) return reject('not enough resources');
+      pay(state, stage.cost);
+      state.ark.build = { structureId: s.id, progress: 0 };
+      events.push({ kind: 'ark-started', stage: state.ark.stage + 1 });
+      return;
+    }
   }
 }
 
@@ -331,7 +437,9 @@ function targetOwner(ctx: Ctx, tile: number): string | null {
   const u = ctx.state.units.find((x) => x.tile === tile && x.owner !== PLAYER);
   if (u) return u.owner;
   const s = structureAt(ctx.state, tile);
-  return s && s.owner !== PLAYER ? s.owner : null;
+  if (s && s.owner !== PLAYER) return s.owner;
+  const r = riftAt(ctx.state, tile);
+  return r && !r.sealed && ctx.state.explored[tile] ? ABYSS : null;
 }
 
 type Pools = typeof narratorData;
@@ -344,8 +452,19 @@ function narrate(state: GameState, events: GameEvent[], rng: Rng, worldName: str
   const find = <K extends GameEvent['kind']>(kind: K) => events.find((e) => e.kind === kind) as Extract<GameEvent, { kind: K }> | undefined;
 
   const victory = find('victory');
-  if (victory) return fill(rng.pick(L.victory));
+  if (victory) return fill(rng.pick((L.victories as Record<string, string[]>)[victory.victory] ?? L.victory));
   if (find('defeat')) return fill(rng.pick(L.defeat));
+  if (find('mother-slain')) return fill(rng.pick(L.motherSlain));
+  if (find('crusade')) return fill(rng.pick(L.crusade));
+  if (find('mother-retreat')) return fill(rng.pick(L.motherRetreat));
+  if (find('rift-sealed')) return fill(rng.pick(L.riftSealed));
+  const expo = find('exposure');
+  if (expo && expo.rising) return fill(rng.pick(L.exposure[Math.min(expo.level, L.exposure.length) - 1] ?? L.idle));
+  const rav = events.find((e) => e.kind === 'ravaged' && e.owner === PLAYER);
+  if (rav && rav.kind === 'ravaged') return fill(rng.pick(L.ravaged), { city: rav.name, unit: unitDef(rav.unit).name });
+  const kaiju = events.find((e) => e.kind === 'essence');
+  if (kaiju && kaiju.kind === 'essence' && unitDef(kaiju.from).kaiju) return fill(rng.pick(L.kaijuSlain), { unit: unitDef(kaiju.from).name });
+  if (find('ark-stage')) return fill(rng.pick(L.ark));
   const gone = find('eliminated');
   if (gone) return fill(rng.pick(L.eliminated), { faction: fname(gone.faction) });
   const taken = events.find((e) => e.kind === 'city-captured' && e.by === PLAYER);
@@ -365,6 +484,9 @@ function narrate(state: GameState, events: GameEvent[], rng: Rng, worldName: str
   if (cache) return fill(rng.pick(L.relic));
   const tech = find('tech-done');
   if (tech) return fill(rng.pick(L.tech), { tech: techDef(tech.tech).name });
+  if (find('gene-done') || find('fused')) return fill(rng.pick(L.genome));
+  const rise = find('abyss-rise');
+  if (rise) return fill(rng.pick(L.abyssRise), { unit: unitDef(rise.unit).name });
   const disc = find('discovered');
   if (disc && disc.rifts > 0) return fill(rng.pick(L.discoverRift));
   if (disc && disc.ruins > 0) return fill(rng.pick(L.discoverRuins));

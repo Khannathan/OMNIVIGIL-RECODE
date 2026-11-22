@@ -4,17 +4,21 @@ A turn-based 4X browser game where you are an **Ascendant AI**. Every run is a n
 
 The design lives in [`docs/design-bible.md`](docs/design-bible.md), the single source of truth. Section 24 lists locked decisions.
 
-## Status: M1 Earthfall slice
+## Status: M3 Depth
 
-Built on M0 Foundations (seed, wrapping hex homeworld with fog, the five-beat cycle, saves, placeholder art).
+Built on M0 Foundations, M1 Earthfall and M2 Feel.
 
 - **Genesis Forge (lite):** before the run, pick an Origin, Architecture, Temperament and Doctrine (each with real effects), an epithet and a banner colour.
-- **Four factions:** a Nation, a Corporation, a Cult and the world's Native Species, each seeded with a name, a capital and 1-2 towns, armies, territory and an opinion of you (-100 Hostile to 80+ Devoted). Your units in their territory sour it; at -50 they declare war. They also go to war with each other.
-- **Resources:** Compute (research), Matter (units), Influence (diplomacy: Sway, Make peace, Incite war), plus Energy, which is allocated, never spent (units, builds and research each hold some; over-allocate and you brown out).
-- **Research:** 20 techs in 4 tiers (`src/content/techs.json`).
-- **Six units:** Observer Drone, Sentinel Trooper, Bastion Tank, Tidewarden (sea), Shrike Jet and Lance Missile (one-shot). Natives field Militia, Armored Columns and Gunships.
-- **Combat forecast:** right-click an enemy hex to see both sides' UPow, every modifier and the exact win chance before you commit. Settlements fight with their walls when nobody defends them.
-- **Victory: Dominion.** Hold every faction's original capital at once. You can keep playing after you win. Lose every settlement and it is a shutdown.
+- **Four factions:** a Nation, a Corporation, a Cult and the world's Native Species, each with a capital, towns, armies, territory and an opinion of you. They go to war with you and with each other.
+- **Five resources:** Compute (research), Matter (units), Influence (diplomacy), Symbiotic Essence (genes and symbiotes, dropped by kaiju and rifts) and Crypto (the black market, scrubbing Exposure, premium parts). Energy is allocated, never spent; over-allocate and you brown out.
+- **Research:** 31 techs in 4 tiers (`src/content/techs.json`).
+- **The Abyss:** kaiju rise from ocean rifts near settlements, wade ashore, ravage a settlement and sink back. Conventional units fight them at -60%. Break a rift's heart (with air units or amphibious TBUs) to seal it. The first rift holds the Abyss Mother, who retreats deeper each time she is beaten until every other rift is sealed.
+- **Titan Forge (T):** design Titan Battle Units from 22 parts across six slots (head, core, two arms, back, legs). TBUs never suffer the kaiju penalty.
+- **Genome Lab (B):** sequence 12 genes in four strands with Essence and fuse 8 symbiote strains into units. Hardened strains ignore the kaiju penalty.
+- **Exposure:** loud acts raise it. Noticed at 25, Revealed at 50 (permanent), Hunted at 75, and at 100 the world unites in a Crusade against you. Scrub it with Crypto.
+- **Four homeworld victories (Operations, O):** Dominion (hold every original capital), Assimilation (every surviving faction Devoted), Exodus (build the Ark in three stages) and Guardian (seal the rifts, then kill the Mother). You can play past each and win more than one.
+- **Combat forecast:** right-click an enemy hex to see both sides' UPow, every modifier and the exact win chance before you commit.
+- **Watch and Reckon:** each cycle plays back with tracers, explosions and hit-stop, then reward cards reveal the spoils.
 
 ## Play it
 
@@ -41,6 +45,7 @@ npm run build      # static site in dist/
 | Move selected unit | Right-click a hex, or M then click |
 | Attack | Right-click an enemy hex (shows the forecast; at peace it asks first) |
 | Research / Factions | R / F |
+| Titan Forge / Genome Lab / Operations | T / B / O |
 | End cycle / continue | Enter |
 | Skip the Watch playback | Space |
 | Grid toggle | G |
@@ -61,6 +66,10 @@ src/sim/       Deterministic simulation. No DOM, no rendering.
   actions.ts   What a unit does in Resolve: move, strike, capture; war and peace
   factions.ts  Faction production, army AI, opinion and wars
   cycle.ts     Order queue and cycle resolution
+  abyss.ts     Abyssians, rifts and the Abyss Mother
+  titans.ts    Titan Forge helpers
+  exposure.ts  Exposure levels and the Crusade
+  victory.ts   The four homeworld victories
   bot.ts       Headless bot used by tests
 src/content/   Game data as JSON: terrain, units, structures, techs, factions, Forge options, rules (tuning), names, narrator lines, art manifest
 src/save/      Local saves

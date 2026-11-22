@@ -591,6 +591,241 @@ function core(mode) {
   return img;
 }
 
+
+// ---------- M3: Abyssians, TBU parts, new icons ----------
+function ellipse(img, cx, cy, rx, ry, c) {
+  for (let y = Math.floor(cy - ry); y <= cy + ry; y++)
+    for (let x = Math.floor(cx - rx); x <= cx + rx; x++) if (((x + 0.5 - cx) / rx) ** 2 + ((y + 0.5 - cy) / ry) ** 2 <= 1) set(img, x, y, c);
+}
+function line(img, x0, y0, x1, y1, t, c) {
+  const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1);
+  for (let i = 0; i <= n; i++) circle(img, x0 + ((x1 - x0) * i) / n, y0 + ((y1 - y0) * i) / n, t / 2, c);
+}
+const ABYSS_C = {
+  hide: hex('#1d2f3a'), hideLight: hex('#33515c'), belly: hex('#5e9e9c'), flesh: hex('#7a2236'), bone: hex('#d8d0c0'), rift: hex('#ff2848'),
+};
+/** One kaiju frame at size S (128 or 256 per frame). Team colour (magenta) marks the glowing eyes and spots. */
+function kaijuFrame(kind, S, frame) {
+  const img = image(S, S);
+  const k = S / 128;
+  const br = [0, 1, 2, 1][frame] * k; // breathing
+  const C = ABYSS_C;
+  const ground = 118 * k;
+  rect(img, 30 * k, ground - 2 * k, 68 * k, 4 * k, [0, 0, 0]);
+  const eyes = (pts) => pts.forEach(([x, y, r]) => circle(img, x * k, (y - br / k) * k, r * k, P.team));
+  switch (kind) {
+    case 'tidecrawler': {
+      for (let i = 0; i < 4; i++) line(img, (36 + i * 18) * k, 90 * k, (28 + i * 22) * k, 116 * k, 5 * k, C.hide);
+      ellipse(img, 64 * k, 84 * k - br, 40 * k, 20 * k, C.hide);
+      ellipse(img, 64 * k, 78 * k - br, 34 * k, 12 * k, C.hideLight);
+      line(img, 30 * k, 80 * k, 14 * k, 64 * k - br, 6 * k, C.hide); // claws
+      line(img, 98 * k, 80 * k, 114 * k, 64 * k - br, 6 * k, C.hide);
+      eyes([[54, 76, 3], [74, 76, 3]]);
+      break;
+    }
+    case 'lantern': {
+      ellipse(img, 60 * k, 88 * k - br, 30 * k, 24 * k, C.hide);
+      ellipse(img, 60 * k, 96 * k - br, 22 * k, 12 * k, C.belly);
+      line(img, 70 * k, 66 * k - br, 92 * k, 34 * k, 3 * k, C.hideLight); // the lure stalk
+      circle(img, 94 * k, (32 - [0, 2, 3, 2][frame]) * k, 8 * k, P.team);
+      for (let i = 0; i < 6; i++) set(img, (48 + i * 5) * k, 104 * k - br, C.bone);
+      eyes([[50, 82, 2]]);
+      break;
+    }
+    case 'riftback': {
+      ellipse(img, 64 * k, 90 * k - br, 46 * k, 24 * k, C.hide);
+      for (let i = 0; i < 6; i++) poly(img, [[(28 + i * 13) * k, 76 * k - br], [(34 + i * 13) * k, (50 - (i % 2) * 8) * k - br], [(40 + i * 13) * k, 76 * k - br]], C.rift);
+      for (let i = 0; i < 4; i++) rect(img, (34 + i * 18) * k, 104 * k, 8 * k, 14 * k, C.hide);
+      eyes([[100, 86, 3]]);
+      break;
+    }
+    case 'maw': {
+      ellipse(img, 64 * k, 80 * k - br, 44 * k, 36 * k, C.hide);
+      const open = [10, 14, 18, 14][frame] * k;
+      ellipse(img, 64 * k, 84 * k - br, 30 * k, open, C.flesh);
+      for (let i = 0; i < 8; i++) {
+        poly(img, [[(38 + i * 7) * k, 84 * k - open - br], [(41 + i * 7) * k, 84 * k - open + 8 * k - br], [(44 + i * 7) * k, 84 * k - open - br]], C.bone);
+        poly(img, [[(38 + i * 7) * k, 84 * k + open - br], [(41 + i * 7) * k, 84 * k + open - 8 * k - br], [(44 + i * 7) * k, 84 * k + open - br]], C.bone);
+      }
+      eyes([[44, 52, 3], [84, 52, 3], [64, 46, 2]]);
+      break;
+    }
+    case 'choir': {
+      for (let i = 0; i < 5; i++) line(img, (40 + i * 12) * k, 96 * k, (34 + i * 15 + Math.sin(frame + i) * 4) * k, 118 * k, 4 * k, C.hideLight);
+      ellipse(img, 64 * k, 70 * k - br, 30 * k, 34 * k, C.hide);
+      for (let i = 0; i < 3; i++) ring(img, 64 * k, 60 * k - br, (10 + i * 7) * k, 2 * k, i === 0 ? P.team : C.belly);
+      eyes([[64, 60, 4]]);
+      break;
+    }
+    case 'deep-king': {
+      rect(img, 40 * k, 92 * k, 14 * k, 26 * k, C.hide);
+      rect(img, 74 * k, 92 * k, 14 * k, 26 * k, C.hide);
+      ellipse(img, 64 * k, 72 * k - br, 36 * k, 30 * k, C.hide);
+      ellipse(img, 64 * k, 80 * k - br, 24 * k, 18 * k, C.belly);
+      ellipse(img, 64 * k, 36 * k - br, 18 * k, 14 * k, C.hideLight);
+      for (let i = 0; i < 5; i++) poly(img, [[(48 + i * 8) * k, 26 * k - br], [(52 + i * 8) * k, (10 + (i % 2) * 6) * k - br], [(56 + i * 8) * k, 26 * k - br]], P.team); // crown
+      line(img, 28 * k, 64 * k - br, 10 * k, 96 * k, 8 * k, C.hide);
+      line(img, 100 * k, 64 * k - br, 118 * k, 96 * k, 8 * k, C.hide);
+      eyes([[58, 36, 3], [70, 36, 3]]);
+      break;
+    }
+    case 'sovereign': {
+      for (let i = 0; i < 6; i++) line(img, 64 * k, 84 * k, (8 + i * 22) * k, (116 - Math.abs(2.5 - i) * 6 + Math.sin(frame * 1.5 + i) * 3) * k, 6 * k, C.hideLight);
+      ellipse(img, 64 * k, 64 * k - br, 40 * k, 40 * k, C.hide);
+      ellipse(img, 64 * k, 64 * k - br, 30 * k, 30 * k, C.flesh);
+      circle(img, 64 * k, 64 * k - br, 14 * k, P.team);
+      circle(img, 64 * k, 64 * k - br, 6 * k, C.void ?? P.void);
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        line(img, (64 + Math.cos(a) * 36) * k, (64 + Math.sin(a) * 36) * k - br, (64 + Math.cos(a) * 50) * k, (64 + Math.sin(a) * 50) * k - br, 4 * k, C.rift);
+      }
+      break;
+    }
+    case 'rift-heart': {
+      ellipse(img, 64 * k, 100 * k, 50 * k, 14 * k, hex('#04162f'));
+      ring(img, 64 * k, 100 * k, 50 * k, 3 * k, C.rift);
+      const beat = [0, 3, 6, 2][frame] * k;
+      ellipse(img, 64 * k, 72 * k, 22 * k + beat, 26 * k + beat, C.flesh);
+      ellipse(img, 60 * k, 66 * k, 10 * k + beat / 2, 12 * k + beat / 2, C.rift);
+      for (let i = 0; i < 5; i++) line(img, 64 * k, 90 * k, (24 + i * 20) * k, 104 * k, 4 * k, C.flesh);
+      circle(img, 64 * k, 70 * k, 4 * k, P.team);
+      break;
+    }
+    case 'abyss-mother': {
+      ellipse(img, 64 * k, 108 * k, 60 * k, 12 * k, hex('#04162f'));
+      for (let i = 0; i < 8; i++) line(img, 64 * k, 90 * k, (4 + i * 17) * k, (116 + Math.sin(frame + i) * 3) * k, 7 * k, C.hide);
+      ellipse(img, 64 * k, 66 * k - br, 44 * k, 40 * k, C.hide);
+      ellipse(img, 64 * k, 72 * k - br, 34 * k, 26 * k, C.belly);
+      ellipse(img, 64 * k, 30 * k - br, 26 * k, 18 * k, C.hideLight);
+      for (let i = 0; i < 7; i++) poly(img, [[(40 + i * 8) * k, 18 * k - br], [(44 + i * 8) * k, (2 + (i % 2) * 5) * k - br], [(48 + i * 8) * k, 18 * k - br]], C.rift);
+      for (let i = 0; i < 6; i++) circle(img, (44 + i * 8) * k, 72 * k - br, 3 * k, P.team); // egg sacs
+      eyes([[54, 30, 4], [74, 30, 4], [64, 24, 3]]);
+      break;
+    }
+  }
+  outline(img);
+  return img;
+}
+function kaijuSheet(kind, S) {
+  const img = image(S * 4, S);
+  for (let f = 0; f < 4; f++) blit(img, kaijuFrame(kind, S, f), f * S, 0);
+  return img;
+}
+function skitterling(frame) {
+  const img = image(64, 64);
+  const step = frame % 2 ? 2 : 0;
+  for (let i = 0; i < 3; i++) {
+    line(img, 24 + i * 8, 40, 18 + i * 8 - step, 52, 2, ABYSS_C.hide);
+    line(img, 28 + i * 8, 40, 34 + i * 8 + step, 52, 2, ABYSS_C.hide);
+  }
+  ellipse(img, 32, 38, 14, 8, ABYSS_C.hide);
+  ellipse(img, 32, 35, 10, 4, ABYSS_C.hideLight);
+  circle(img, 44, 36, 2, P.team);
+  rect(img, 24, 54, 16, 2, [0, 0, 0]);
+  outline(img);
+  return img;
+}
+
+/** TBU parts share one joint layout in 128x128: ground at y 120, hips at y 84, shoulders at y 52, neck at y 40. */
+const TBU = { steel: hex('#4a5560'), steelLight: hex('#6b7883'), dark: hex('#2a343c'), glow: hex('#5fe0ff'), hot: hex('#ffb84a'), bio: hex('#c8ff5a'), gold: hex('#ffd166') };
+function tbuPart(slot, id) {
+  const img = image(128, 128);
+  const T = TBU;
+  switch (`${slot}:${id}`) {
+    // heads
+    case 'head:sentinel-optics': rect(img, 54, 28, 20, 14, T.steel); rect(img, 57, 32, 16, 4, P.team); break;
+    case 'head:hunter-array': rect(img, 52, 28, 24, 14, T.steel); for (let i = 0; i < 3; i++) circle(img, 58 + i * 7, 34, 2.5, P.team); line(img, 56, 28, 50, 18, 2, T.dark); break;
+    case 'head:warden-crown': rect(img, 54, 30, 20, 12, T.steelLight); for (let i = 0; i < 3; i++) poly(img, [[54 + i * 7, 30], [57 + i * 7, 20], [60 + i * 7, 30]], T.gold); rect(img, 58, 34, 12, 3, P.team); break;
+    case 'head:oracle-dome': ellipse(img, 64, 34, 13, 10, T.steel); ellipse(img, 66, 32, 8, 6, P.team); circle(img, 68, 30, 2, hex('#ffffff')); break;
+    // cores
+    case 'core:fission-core': rect(img, 46, 42, 36, 40, T.steel); rect(img, 46, 42, 36, 5, T.steelLight); rect(img, 58, 56, 12, 12, T.hot); break;
+    case 'core:fusion-core': rect(img, 46, 42, 36, 40, T.steel); circle(img, 64, 62, 9, T.glow); ring(img, 64, 62, 12, 2, T.steelLight); break;
+    case 'core:riftheart-core': rect(img, 46, 42, 36, 40, T.dark); ellipse(img, 64, 62, 9, 11, ABYSS_C.flesh); circle(img, 64, 62, 4, T.bio); break;
+    case 'core:precursor-core': rect(img, 46, 42, 36, 40, T.steel); poly(img, [[64, 50], [74, 62], [64, 74], [54, 62]], T.gold); circle(img, 64, 62, 3, hex('#ffffff')); break;
+    // arms: drawn as the near (right-hand) arm; the far arm is the same art mirrored
+    case 'arm:autocannon': rect(img, 82, 46, 12, 12, T.steelLight); rect(img, 86, 56, 8, 22, T.steel); rect(img, 88, 74, 26, 6, T.dark); rect(img, 110, 73, 4, 8, P.team); break;
+    case 'arm:plasma-lance': rect(img, 82, 46, 12, 12, T.steelLight); rect(img, 86, 56, 8, 22, T.steel); rect(img, 90, 74, 34, 3, T.glow); circle(img, 92, 75, 4, P.team); break;
+    case 'arm:missile-pod': rect(img, 82, 46, 12, 12, T.steelLight); rect(img, 84, 56, 22, 20, T.steel); for (let i = 0; i < 4; i++) circle(img, 90 + (i % 2) * 9, 61 + Math.floor(i / 2) * 9, 2.5, P.team); break;
+    case 'arm:riftblade': rect(img, 82, 46, 12, 12, T.steelLight); rect(img, 86, 56, 8, 20, T.steel); poly(img, [[90, 74], [124, 64], [92, 82]], T.bio); break;
+    case 'arm:railgun': rect(img, 82, 46, 12, 12, T.steelLight); rect(img, 86, 56, 8, 22, T.steel); rect(img, 88, 70, 38, 3, T.dark); rect(img, 88, 77, 38, 3, T.dark); rect(img, 96, 73, 22, 4, P.team); break;
+    case 'arm:aegis-arm': rect(img, 82, 46, 12, 12, T.steelLight); rect(img, 86, 56, 8, 18, T.steel); poly(img, [[94, 48], [110, 52], [110, 84], [94, 92]], T.steelLight); rect(img, 100, 62, 4, 16, P.team); break;
+    // backs
+    case 'back:sensor-mast': rect(img, 40, 20, 4, 40, T.dark); circle(img, 42, 18, 4, P.team); rect(img, 36, 46, 12, 18, T.steel); break;
+    case 'back:missile-rack': rect(img, 30, 30, 20, 26, T.steel); for (let i = 0; i < 3; i++) rect(img, 33 + i * 6, 26, 4, 8, P.team); break;
+    case 'back:repair-drones': rect(img, 38, 40, 12, 24, T.steel); circle(img, 34, 26, 5, T.steelLight); circle(img, 48, 18, 5, T.steelLight); set(img, 34, 26, T.glow); set(img, 48, 18, T.glow); circle(img, 34, 26, 2, P.team); break;
+    case 'back:reactor-pack': for (let i = 0; i < 2; i++) { rect(img, 32 + i * 12, 30, 10, 32, T.steel); rect(img, 34 + i * 12, 34, 6, 20, T.hot); } break;
+    // legs
+    case 'legs:strider': rect(img, 50, 80, 28, 8, T.steel); rect(img, 50, 86, 10, 30, T.steel); rect(img, 68, 86, 10, 30, T.steel); rect(img, 46, 114, 16, 6, T.dark); rect(img, 66, 114, 16, 6, T.dark); rect(img, 52, 96, 6, 3, P.team); break;
+    case 'legs:bulwark-treads': rect(img, 50, 80, 28, 10, T.steel); rect(img, 36, 96, 56, 24, T.dark); for (let i = 0; i < 6; i++) circle(img, 42 + i * 9, 108, 4, T.steelLight); rect(img, 40, 92, 48, 4, P.team); break;
+    case 'legs:tidewalker': rect(img, 50, 80, 28, 8, T.steel); line(img, 54, 86, 38, 116, 8, T.steel); line(img, 74, 86, 90, 116, 8, T.steel); ellipse(img, 36, 118, 10, 3, P.surf); ellipse(img, 92, 118, 10, 3, P.surf); rect(img, 60, 90, 8, 4, P.team); break;
+    case 'legs:skylance-jets': rect(img, 48, 80, 32, 12, T.steel); rect(img, 50, 92, 8, 10, T.dark); rect(img, 70, 92, 8, 10, T.dark); poly(img, [[50, 102], [54, 118], [58, 102]], T.hot); poly(img, [[70, 102], [74, 118], [78, 102]], T.hot); rect(img, 60, 84, 8, 4, P.team); break;
+    default: rect(img, 54, 54, 20, 20, P.team);
+  }
+  outline(img);
+  return img;
+}
+
+function iconEssence() {
+  const img = image(32, 32);
+  poly(img, [[16, 3], [26, 18], [16, 29], [6, 18]], hex('#2f6f6c'));
+  ellipse(img, 16, 19, 7, 8, hex('#5e9e9c'));
+  circle(img, 14, 17, 3, hex('#c8ff5a'));
+  outline(img);
+  return img;
+}
+function iconCrypto() {
+  const img = image(32, 32);
+  circle(img, 16, 16, 13, hex('#a8741a'));
+  circle(img, 16, 16, 10, hex('#ffb84a'));
+  rect(img, 12, 9, 3, 14, hex('#5a3a08'));
+  rect(img, 12, 9, 8, 3, hex('#5a3a08'));
+  rect(img, 12, 15, 8, 2, hex('#5a3a08'));
+  rect(img, 12, 21, 8, 2, hex('#5a3a08'));
+  outline(img);
+  return img;
+}
+function iconExposure() {
+  const img = image(32, 32);
+  ellipse(img, 16, 16, 14, 8, hex('#e6ecee'));
+  circle(img, 16, 16, 6, hex('#e0283c'));
+  circle(img, 16, 16, 3, hex('#04070d'));
+  set(img, 14, 14, hex('#ffffff'));
+  outline(img);
+  return img;
+}
+const STRAIN_C = {
+  'chitin-mantle': '#5fe0ff', 'razor-brood': '#ff3a4a', 'tidal-graft': '#5e9e9c', 'neural-lace': '#b98cff',
+  'leviathan-hide': '#5fe0ff', 'apex-parasite': '#ff3a4a', 'deep-choir': '#5e9e9c', 'chorus-seed': '#b98cff',
+};
+function symbioteIcon(id) {
+  const img = image(64, 64);
+  const c = hex(STRAIN_C[id] ?? '#c8ff5a');
+  const seed = id.length * 7 + id.charCodeAt(0);
+  ellipse(img, 32, 34, 20, 18, shade(c, 0.35));
+  ellipse(img, 32, 34, 14, 12, shade(c, 0.7));
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + seed;
+    line(img, 32 + Math.cos(a) * 14, 34 + Math.sin(a) * 12, 32 + Math.cos(a) * 26, 34 + Math.sin(a) * 24, 3, shade(c, 0.55));
+  }
+  circle(img, 32, 32, 5, hex('#c8ff5a'));
+  circle(img, 30, 30, 2, hex('#ffffff'));
+  outline(img);
+  return img;
+}
+function iconArk() {
+  const img = image(64, 64);
+  poly(img, [[32, 4], [44, 30], [44, 50], [20, 50], [20, 30]], hex('#6b7883'));
+  poly(img, [[32, 4], [38, 30], [26, 30]], hex('#e6ecee'));
+  rect(img, 28, 34, 8, 6, hex('#5fe0ff'));
+  poly(img, [[20, 40], [10, 56], [20, 52]], hex('#4a5560'));
+  poly(img, [[44, 40], [54, 56], [44, 52]], hex('#4a5560'));
+  poly(img, [[24, 50], [32, 62], [40, 50]], hex('#ffb84a'));
+  outline(img);
+  return img;
+}
+const TITAN_DATA = JSON.parse(readFileSync(join(root, 'src/content/titans.json'), 'utf8'));
+const GENOME_DATA = JSON.parse(readFileSync(join(root, 'src/content/genome.json'), 'utf8'));
+
 const MAKERS = {
   ...TILES,
   'unit_observer-drone_idle.png': () => sheet(drone),
@@ -621,6 +856,15 @@ const MAKERS = {
   'ui_core_idle.png': () => core('idle'),
   'ui_core_pulse.png': () => core('pulse'),
   'ui_core_glitch.png': () => core('glitch'),
+  'unit_skitterling_idle.png': () => sheet(skitterling),
+  ...Object.fromEntries(['tidecrawler', 'lantern', 'riftback', 'maw', 'choir', 'deep-king', 'sovereign', 'rift-heart'].map((k) => [`unit_${k}_idle.png`, () => kaijuSheet(k, 128)])),
+  'unit_abyss-mother_idle.png': () => kaijuSheet('abyss-mother', 256),
+  ...Object.fromEntries(TITAN_DATA.parts.map((p) => [`tbu_${p.slot}_${p.id}.png`, () => tbuPart(p.slot, p.id)])),
+  'icon_essence.png': iconEssence,
+  'icon_crypto.png': iconCrypto,
+  'icon_exposure.png': iconExposure,
+  ...Object.fromEntries(GENOME_DATA.strains.map((st) => [`icon_symbiote_${st.id}.png`, () => symbioteIcon(st.id)])),
+  'icon_ark.png': iconArk,
 };
 
 mkdirSync(outDir, { recursive: true });

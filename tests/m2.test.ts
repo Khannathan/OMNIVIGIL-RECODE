@@ -123,7 +123,9 @@ describe('advisor and goals', () => {
     }
     const g = goals(state, world, list);
     expect(g.now).toContain('Choose research');
-    expect(g.objective.total).toBe(state.factions.length);
+    // The default doctrine (Protector) aims at the Guardian victory.
+    expect(g.objective.kind).toBe('guardian');
+    expect(g.objective.total).toBe(state.rifts.length);
     expect(g.ambition.text.length).toBeGreaterThan(10);
   });
 
