@@ -1,0 +1,29 @@
+{
+  "_doc": "Every art file the game loads, with its final name and size (design bible section 18). Drop real art into assets/art/ under the same name and size and it replaces the placeholder. frames = horizontal frames in one row.",
+  "art": [
+    { "file": "hex_deep-sea.png",    "w": 64, "h": 74 },
+    { "file": "hex_shallow-sea.png", "w": 64, "h": 74 },
+    { "file": "hex_coast.png",       "w": 64, "h": 74 },
+    { "file": "hex_grassland.png",   "w": 64, "h": 74 },
+    { "file": "hex_forest.png",      "w": 64, "h": 74 },
+    { "file": "hex_hills.png",       "w": 64, "h": 74 },
+    { "file": "hex_mountain.png",    "w": 64, "h": 74 },
+    { "file": "hex_desert.png",      "w": 64, "h": 74 },
+    { "file": "hex_tundra.png",      "w": 64, "h": 74 },
+    { "file": "hex_snow.png",        "w": 64, "h": 74 },
+    { "file": "hex_marsh.png",       "w": 64, "h": 74 },
+    { "file": "hex_ruins.png",       "w": 64, "h": 74 },
+    { "file": "hex_rift.png",        "w": 64, "h": 74 },
+    { "file": "unit_observer-drone_idle.png",   "w": 256, "h": 64, "frames": 4 },
+    { "file": "unit_sentinel-trooper_idle.png", "w": 256, "h": 64, "frames": 4 },
+    { "file": "structure_ai-node_stage1.png", "w": 64, "h": 64 },
+    { "file": "structure_ai-node_stage2.png", "w": 64, "h": 64 },
+    { "file": "structure_ai-node_stage3.png", "w": 64, "h": 64 },
+    { "file": "icon_energy.png",  "w": 32, "h": 32 },
+    { "file": "icon_compute.png", "w": 32, "h": 32 },
+    { "file": "icon_matter.png",  "w": 32, "h": 32 },
+    { "file": "ui_core_idle.png",   "w": 64, "h": 64 },
+    { "file": "ui_core_pulse.png",  "w": 64, "h": 64 },
+    { "file": "ui_core_glitch.png", "w": 64, "h": 64 }
+  ]
+}

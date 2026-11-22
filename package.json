@@ -1,0 +1,21 @@
+{
+  "name": "omnivigil",
+  "private": true,
+  "version": "0.0.1",
+  "description": "OMNIVIGIL: a turn-based 4X where you are an Ascendant AI.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "placeholders": "node scripts/gen-placeholders.mjs"
+  },
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "typescript": "~5.9",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.1"
+  }
+}
