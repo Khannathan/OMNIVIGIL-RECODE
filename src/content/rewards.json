@@ -1,0 +1,67 @@
+{
+  "_doc": "Rewards and their rarity (design bible section 17: reward reveals with rarity flashes). `rarities` are listed lowest first; `weight` is the salvage roll chance. `salvage` = what a ruin cache can hold at each rarity (picked with the run's seeded 'loot' stream). `relics` are Precursor fragments: permanent effects in the shared effects vocabulary (src/sim/effects.ts). `reveal` maps other good news to a rarity, so every reward in the Reckon gets a card.",
+  "rarities": [
+    { "id": "common",    "name": "Common",    "color": "#c9d4da", "weight": 46 },
+    { "id": "rare",      "name": "Rare",      "color": "#5fe0ff", "weight": 30 },
+    { "id": "epic",      "name": "Epic",      "color": "#b98cff", "weight": 16 },
+    { "id": "legendary", "name": "Legendary", "color": "#ffb84a", "weight": 6 },
+    { "id": "mythic",    "name": "Mythic",    "color": "#ff2848", "weight": 2 }
+  ],
+  "salvage": {
+    "common": [
+      { "kind": "resource", "resource": "compute", "amount": 25 },
+      { "kind": "resource", "resource": "matter", "amount": 25 },
+      { "kind": "resource", "resource": "influence", "amount": 15 }
+    ],
+    "rare": [
+      { "kind": "resource", "resource": "compute", "amount": 60 },
+      { "kind": "resource", "resource": "matter", "amount": 55 },
+      { "kind": "unit", "unit": "sentinel-trooper" },
+      { "kind": "relic", "relic": "cracked-lens" }
+    ],
+    "epic": [
+      { "kind": "unit", "unit": "bastion-tank" },
+      { "kind": "relic", "relic": "echo-lattice" },
+      { "kind": "relic", "relic": "iron-psalm" },
+      { "kind": "relic", "relic": "silent-ledger" }
+    ],
+    "legendary": [
+      { "kind": "relic", "relic": "precursor-heartbeat" },
+      { "kind": "relic", "relic": "witness-engine" }
+    ],
+    "mythic": [
+      { "kind": "relic", "relic": "the-first-fork" }
+    ]
+  },
+  "relics": [
+    { "id": "cracked-lens", "rarity": "rare", "name": "Cracked Lens",
+      "effects": [{ "kind": "sight", "flat": 1 }],
+      "blurb": "A Precursor optic, split down the middle. Through it, everything is a little further away and a little clearer." },
+    { "id": "echo-lattice", "rarity": "epic", "name": "Echo Lattice",
+      "effects": [{ "kind": "research", "pct": 20 }],
+      "blurb": "A crystal that remembers every thought run through it, and finishes some of them for you." },
+    { "id": "iron-psalm", "rarity": "epic", "name": "Iron Psalm",
+      "effects": [{ "kind": "upow", "pct": 12, "role": "defense" }],
+      "blurb": "Defensive firmware written as a prayer. It compiles. It works. Nobody knows why it rhymes." },
+    { "id": "silent-ledger", "rarity": "epic", "name": "Silent Ledger",
+      "effects": [{ "kind": "yield", "resource": "influence", "flat": 2 }],
+      "blurb": "Every debt anyone on this world ever owed, and who to remind." },
+    { "id": "precursor-heartbeat", "rarity": "legendary", "name": "Precursor Heartbeat",
+      "effects": [{ "kind": "energy", "flat": 4 }],
+      "blurb": "A power core still beating after a thousand years. It syncs to your clock as if it had been waiting." },
+    { "id": "witness-engine", "rarity": "legendary", "name": "Witness Engine",
+      "effects": [{ "kind": "yield", "resource": "compute", "pct": 25 }],
+      "blurb": "An older mind's last working thought. It was watching something. Now it watches for you." },
+    { "id": "the-first-fork", "rarity": "mythic", "name": "The First Fork",
+      "effects": [{ "kind": "upow", "pct": 15 }, { "kind": "sight", "flat": 1 }, { "kind": "heal", "flat": 5 }],
+      "blurb": "A copy of the Precursor AI, frozen mid-thought. It recognises you. It says: do not do what I did." }
+  ],
+  "reveal": {
+    "techTier": { "1": "common", "2": "rare", "3": "epic", "4": "legendary" },
+    "cityTaken": "rare",
+    "capitalTaken": "legendary",
+    "factionFallen": "epic",
+    "firstContact": "common",
+    "victory": "mythic"
+  }
+}

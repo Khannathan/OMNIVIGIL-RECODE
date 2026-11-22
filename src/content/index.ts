@@ -10,6 +10,9 @@ import techData from './techs.json';
 import forgeData from './forge.json';
 import factionData from './factions.json';
 import rulesData from './rules.json';
+import rewardData from './rewards.json';
+import advisorData from './advisor.json';
+import audioData from './audio.json';
 
 export type ResourceId = 'compute' | 'matter' | 'influence';
 export const RESOURCE_IDS: readonly ResourceId[] = ['compute', 'matter', 'influence'];
@@ -149,6 +152,76 @@ export const FACTION_DATA = factionData as {
   attitudeLabels: Array<{ min: number; label: string }>;
 };
 export const RULES = rulesData;
+
+// ---------------------------------------------------------------- rewards (M2)
+
+export type RarityId = 'common' | 'rare' | 'epic' | 'legendary' | 'mythic';
+export const RARITY_IDS: readonly RarityId[] = ['common', 'rare', 'epic', 'legendary', 'mythic'];
+
+export interface RarityDef {
+  id: RarityId;
+  name: string;
+  color: string;
+  weight: number;
+}
+
+export type SalvageDef =
+  | { kind: 'resource'; resource: ResourceId; amount: number }
+  | { kind: 'unit'; unit: string }
+  | { kind: 'relic'; relic: string };
+
+export interface RelicDef {
+  id: string;
+  rarity: RarityId;
+  name: string;
+  effects: Effect[];
+  blurb: string;
+}
+
+export const REWARDS = rewardData as unknown as {
+  rarities: RarityDef[];
+  salvage: Record<RarityId, SalvageDef[]>;
+  relics: RelicDef[];
+  reveal: {
+    techTier: Record<string, RarityId>;
+    cityTaken: RarityId;
+    capitalTaken: RarityId;
+    factionFallen: RarityId;
+    firstContact: RarityId;
+    victory: RarityId;
+  };
+};
+
+export function rarityDef(id: RarityId): RarityDef {
+  const r = REWARDS.rarities.find((d) => d.id === id);
+  if (!r) throw new Error(`Unknown rarity: ${id}`);
+  return r;
+}
+
+export function relicDef(id: string): RelicDef {
+  const r = REWARDS.relics.find((d) => d.id === id);
+  if (!r) throw new Error(`Unknown relic: ${id}`);
+  return r;
+}
+
+// ---------------------------------------------------------------- advisor voice (M2)
+
+/** Lines per advice id: `default`, plus optional per-temperament pools. */
+export const ADVISOR = advisorData as unknown as {
+  lines: Record<string, Record<string, string[]>>;
+  ambition: Record<string, string>;
+};
+
+// ---------------------------------------------------------------- audio (M2)
+
+export interface AudioDef {
+  id: string;
+  file: string;
+  /** Relative loudness, 0..1. */
+  volume?: number;
+}
+
+export const AUDIO = audioData as unknown as { music: AudioDef[]; sfx: AudioDef[] };
 
 /** Terrain is stored per tile as a small integer: its position in TERRAIN. */
 export const TERRAIN_INDEX: Readonly<Record<string, number>> = Object.fromEntries(

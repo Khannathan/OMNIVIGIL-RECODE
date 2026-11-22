@@ -2,7 +2,7 @@
 // modifiers. Every rule that a tech or Forge option can change reads from
 // here, so adding a new tech is a data edit in techs.json.
 
-import { Domain, Effect, FORGE, ForgeOption, ResourceId, techDef } from '../content';
+import { Domain, Effect, FORGE, ForgeOption, relicDef, ResourceId, techDef } from '../content';
 import type { AiProfile, GameState } from './state';
 
 export interface Mods {
@@ -32,20 +32,24 @@ export function forgeOptions(ai: AiProfile): ForgeOption[] {
 }
 
 /** Every effect the player has, tagged with where it came from. */
-export function playerEffects(state: Pick<GameState, 'ai' | 'techs'>): Array<{ effect: Effect; source: string }> {
+export function playerEffects(state: Pick<GameState, 'ai' | 'techs'> & { relics?: string[] }): Array<{ effect: Effect; source: string }> {
   const out: Array<{ effect: Effect; source: string }> = [];
   for (const o of forgeOptions(state.ai)) for (const effect of o.effects) out.push({ effect, source: o.name });
   for (const id of state.techs) {
     const t = techDef(id);
     for (const effect of t.effects) out.push({ effect, source: t.name });
   }
+  for (const id of state.relics ?? []) {
+    const r = relicDef(id);
+    for (const effect of r.effects) out.push({ effect, source: r.name });
+  }
   return out;
 }
 
 const cache = new WeakMap<object, { key: string; mods: Mods }>();
 
-export function mods(state: Pick<GameState, 'ai' | 'techs'>): Mods {
-  const key = `${state.techs.length}|${state.ai.origin}|${state.ai.architecture}|${state.ai.temperament}|${state.ai.doctrine}`;
+export function mods(state: Pick<GameState, 'ai' | 'techs'> & { relics?: string[] }): Mods {
+  const key = `${state.techs.length}|${state.relics?.length ?? 0}|${state.ai.origin}|${state.ai.architecture}|${state.ai.temperament}|${state.ai.doctrine}`;
   const hit = cache.get(state);
   if (hit && hit.key === key) return hit.mods;
   const zero = (): Record<ResourceId, number> => ({ compute: 0, matter: 0, influence: 0 });

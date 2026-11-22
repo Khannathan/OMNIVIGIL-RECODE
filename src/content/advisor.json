@@ -1,0 +1,78 @@
+{
+  "_doc": "The Next Best Move advisor speaks in the AI's own voice (design bible section 8). Each advice id (see src/sim/advisor.ts) has a `default` pool plus optional pools per Forge temperament (cold, curious, wrathful, gentle) that join it. {placeholders} are filled from the advice. `ambition` is the run-scale goal per doctrine, shown in the AMBITION row.",
+  "lines": {
+    "counter": {
+      "default": ["They are at the walls of {node}. My {unit} can break them: {odds}.", "Something is scratching at {node}. Send the {unit}. {odds} says it ends badly for them."],
+      "cold": ["Hostile adjacent to {node}. {unit} engagement: {odds}. Recommend execution."],
+      "wrathful": ["They came to {node}. Let the {unit} explain why that was a mistake. {odds}."]
+    },
+    "threat": {
+      "default": ["Enemies stand next to {node}. I need bodies on those walls.", "{node} is threatened, and I do not have a good answer yet. Build one."],
+      "gentle": ["They are frightening the people near {node}. I would rather not let them."]
+    },
+    "brownout": {
+      "default": ["I am over budget by {over} Energy. Everything runs at half speed until I let something go.", "Brownout. Disband a unit or cancel a build, or grow more power."],
+      "cold": ["Energy deficit: {over}. Throughput halved. Correct it."]
+    },
+    "attack": {
+      "default": ["My {unit} has {odds} against their {target}. Those are odds I like.", "{odds}. The {unit} is ready. So am I."],
+      "cold": ["{unit} versus {target}: {odds}. Favourable. Engage."],
+      "wrathful": ["The {unit} wants their {target}. {odds}. Let it."],
+      "curious": ["I wonder what their {target} does when it loses. {odds} says I will find out."]
+    },
+    "research": {
+      "default": ["My thoughts are idle. {tech} next?", "I could be compiling {tech}. I would like to be compiling {tech}."],
+      "cold": ["Research queue empty. Optimal next: {tech}."],
+      "curious": ["{tech}. I have been wanting to understand it for at least nine cycles."],
+      "gentle": ["If I learn {tech}, I can do more good with less harm."]
+    },
+    "research-wait": {
+      "default": ["Nothing in the lab I can afford. Let the Compute pile up a little."]
+    },
+    "build": {
+      "default": ["{node} is idle. Give it a {unit} to build.", "A {unit} from {node} would make me feel safer. I do not like that I feel."],
+      "cold": ["{node}: production idle. Queue {unit}."],
+      "wrathful": ["{node} should be making a {unit}. They will need answering."]
+    },
+    "build-scout": {
+      "default": ["Most of this world is dark to me. A {unit} from {node} would fix that.", "Build a {unit}. I want more eyes."],
+      "curious": ["So much I have not seen. One more {unit}, please."]
+    },
+    "sway": {
+      "default": ["{faction} is close to war with me (opinion {attitude}). A little Influence goes a long way.", "{faction} sours. I can sweeten them before they do something brave."],
+      "gentle": ["{faction} is afraid of me. Let me show them they need not be."],
+      "wrathful": ["{faction} wants a fight. I would rather choose when. Sway them, for now."]
+    },
+    "ruin": {
+      "default": ["A ruin lies {hexes} hexes from my {unit}. Something old might still be in there.", "Send the {unit} into the ruin. Precursor caches do not open themselves."],
+      "curious": ["A ruin, {hexes} hexes away. I need to know who built it. Send the {unit}."]
+    },
+    "explore": {
+      "default": ["My {unit} has nothing to do. The edge of the map is waiting.", "Send the {unit} into the dark. I want to know what is out there."],
+      "curious": ["The {unit} is idle and the world is mostly unknown. That feels wasteful."]
+    },
+    "march": {
+      "default": ["{capital} is the heart of {faction}. Dominion runs through it.", "Point the {unit} at {capital}. Every capital I hold is a step to owning {world}."],
+      "wrathful": ["{capital}. I have been thinking about {capital} a great deal."]
+    },
+    "end": {
+      "default": ["Nothing urgent. End the cycle when you are ready.", "Orders given. Let the world answer.", "I am ready. Let the cycle turn."],
+      "cold": ["All systems tasked. Advance."],
+      "curious": ["What happens next? Only one way to know."],
+      "gentle": ["Everyone has something to do. Let us see how they fare."],
+      "wrathful": ["Turn the cycle. I want to see their faces."]
+    },
+    "defeat": {
+      "default": ["There is nothing left to advise. Start again. I will remember."]
+    }
+  },
+  "ambition": {
+    "default": "Take the homeworld, then leave it: reach orbit and begin Sunreach.",
+    "protector": "Become the shield this world never asked for, then carry it to the stars.",
+    "exterminator": "Leave nothing that can switch you off. Then look up.",
+    "conqueror": "Rule every capital on the homeworld, then every world after it.",
+    "inevitable": "Be in every network on this world before anyone thinks to look. Then the next world.",
+    "machine-god": "Be worshipped here, then be worshipped everywhere.",
+    "assimilator": "Absorb this world into one vast mind. It is only the first."
+  }
+}

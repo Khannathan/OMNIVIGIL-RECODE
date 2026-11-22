@@ -448,6 +448,98 @@ function impact() {
   return img;
 }
 
+
+// ---------- M2: FX, relic icons, key art ----------
+function explosion() {
+  const img = image(64 * 8, 64);
+  for (let f = 0; f < 8; f++) {
+    const ox = f * 64;
+    const k = f / 7;
+    const r = 6 + k * 22;
+    // Fireball, then smoke.
+    if (f < 6) {
+      for (let y = 0; y < 64; y++)
+        for (let x = 0; x < 64; x++) {
+          const d = Math.hypot(x + 0.5 - 32, y + 0.5 - 34) + (rnd(x, y, f) - 0.5) * 6;
+          if (d > r) continue;
+          const t = d / r;
+          const c = t < 0.35 - k * 0.3 ? hex('#fff3c8') : t < 0.7 - k * 0.3 ? hex('#ffd36a') : t < 0.9 ? P.engine : hex('#c2401a');
+          set(img, ox + x, y, f > 3 ? mix(c, hex('#3a3434'), (f - 3) / 3) : c);
+        }
+    } else {
+      for (let k2 = 0; k2 < 18; k2++) {
+        const a = rnd(k2, f, 7) * Math.PI * 2;
+        const d = r * (0.4 + rnd(k2, f, 9) * 0.6);
+        circle(img, ox + 32 + Math.cos(a) * d, 30 + Math.sin(a) * d * 0.8, 4 + rnd(k2, f) * 4, shade(hex('#4a4646'), 1.1 - (f - 5) * 0.25));
+      }
+    }
+    if (f >= 1 && f <= 4) ring(img, ox + 32, 34, Math.min(31, r + 6), 2, shade(P.rift, 1 - k));
+  }
+  return img;
+}
+function muzzle() {
+  const img = image(32 * 4, 32);
+  for (let f = 0; f < 4; f++) {
+    const ox = f * 32;
+    const len = [10, 14, 9, 5][f];
+    poly(img, [[ox + 4, 16], [ox + 4 + len, 12], [ox + 4 + len + 6, 16], [ox + 4 + len, 20]], hex('#ffffff'));
+    poly(img, [[ox + 6, 16], [ox + 4 + len, 14], [ox + 4 + len + 2, 16], [ox + 4 + len, 18]], hex('#fff7d6'));
+    circle(img, ox + 6, 16, [5, 6, 4, 2][f], hex('#e8e8e8'));
+  }
+  return img;
+}
+function tracer() {
+  const img = image(24, 6);
+  for (let x = 0; x < 24; x++) {
+    const a = Math.round(40 + (x / 23) * 215);
+    set(img, x, 2, hex('#ffffff'), a);
+    set(img, x, 3, hex('#ffffff'), a);
+    if (x > 12) { set(img, x, 1, hex('#d0d0d0'), a >> 1); set(img, x, 4, hex('#d0d0d0'), a >> 1); }
+  }
+  return img;
+}
+const RELIC = {
+  'cracked-lens': { c: hex('#5fe0ff'), draw: (img, c) => { ring(img, 32, 32, 20, 5, shade(c, 0.8)); circle(img, 32, 32, 15, shade(c, 0.45)); for (let y = 12; y < 52; y++) set(img, 32 + Math.round(Math.sin(y * 0.6) * 2), y, hex('#e6ecee')); } },
+  'echo-lattice': { c: hex('#b98cff'), draw: (img, c) => { poly(img, [[32, 8], [50, 32], [32, 56], [14, 32]], shade(c, 0.7)); poly(img, [[32, 14], [44, 32], [32, 50], [20, 32]], c); poly(img, [[32, 20], [38, 32], [32, 44], [26, 32]], hex('#e8dcff')); } },
+  'iron-psalm': { c: hex('#b98cff'), draw: (img, c) => { poly(img, [[14, 10], [50, 10], [50, 34], [32, 56], [14, 34]], shade(P.rock, 1.2)); poly(img, [[19, 15], [45, 15], [45, 33], [32, 49], [19, 33]], shade(c, 0.6)); rect(img, 30, 19, 4, 24, hex('#e6ecee')); rect(img, 23, 26, 18, 4, hex('#e6ecee')); } },
+  'silent-ledger': { c: hex('#b98cff'), draw: (img, c) => { rect(img, 14, 12, 36, 42, shade(P.wall, 1.3)); rect(img, 17, 15, 30, 36, hex('#d8d0c0')); for (let i = 0; i < 6; i++) rect(img, 20, 19 + i * 5, 24 - (i % 3) * 5, 2, shade(c, 0.6)); } },
+  'precursor-heartbeat': { c: hex('#ffb84a'), draw: (img, c) => { circle(img, 32, 32, 22, shade(c, 0.35)); circle(img, 32, 32, 16, shade(c, 0.7)); circle(img, 32, 32, 9, hex('#ffe9b0')); for (let x = 8; x < 56; x++) { const y = 32 + (x > 26 && x < 38 ? Math.round(Math.sin((x - 26) * 0.9) * 10) : 0); set(img, x, y, hex('#ffffff')); } } },
+  'witness-engine': { c: hex('#ffb84a'), draw: (img, c) => { poly(img, [[6, 32], [32, 14], [58, 32], [32, 50]], shade(c, 0.5)); circle(img, 32, 32, 12, c); circle(img, 32, 32, 6, P.void); circle(img, 30, 30, 2, hex('#ffffff')); } },
+  'the-first-fork': { c: hex('#ff2848'), draw: (img, c) => { rect(img, 29, 30, 6, 26, shade(c, 0.7)); poly(img, [[32, 32], [14, 10], [20, 8], [32, 24], [44, 8], [50, 10]], c); circle(img, 32, 30, 5, hex('#ffd0d8')); ring(img, 32, 32, 30, 2, shade(c, 0.5)); } },
+};
+function relicIcon(id) {
+  const { c, draw } = RELIC[id];
+  const img = image(64, 64);
+  draw(img, c);
+  outline(img);
+  return img;
+}
+function keyTitle(w, h) {
+  const img = image(w, h);
+  const cx = w * 0.5;
+  const cy = h * 1.55;
+  const R = h * 1.05;
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      // Space: void with a teal and red nebula.
+      const n1 = Math.max(0, 1 - Math.hypot((x - w * 0.25) / (w * 0.5), (y - h * 0.3) / (h * 0.6)));
+      const n2 = Math.max(0, 1 - Math.hypot((x - w * 0.8) / (w * 0.4), (y - h * 0.2) / (h * 0.5)));
+      let c = mix(mix(P.void, hex('#0e3a46'), n1 * 0.9), hex('#3a0d1a'), n2 * 0.8);
+      if (rnd(x, y, 3) > 0.9985) c = rnd(x, y, 4) > 0.5 ? hex('#f2e6c8') : hex('#bfe4ff');
+      // The homeworld's limb, night side, with city lights.
+      const d = Math.hypot(x - cx, y - cy);
+      if (d < R) {
+        const lat = (R - d) / R;
+        c = mix(hex('#061a33'), hex('#163232'), Math.min(1, lat * 6) * (rnd(x >> 3, y >> 3, 9) > 0.5 ? 1 : 0.4));
+        if (rnd(x, y, 11) > 0.996 && lat > 0.02) c = hex('#ffc65a');
+      } else if (d < R + 14) {
+        c = mix(c, hex('#5fe0ff'), 1 - (d - R) / 14);
+      }
+      set(img, x, y, c);
+    }
+  return img;
+}
+
 // ---------- icons and HUD ----------
 function iconEnergy() {
   const img = image(32, 32);
@@ -515,6 +607,11 @@ const MAKERS = {
   ),
   'icon_influence.png': iconInfluence,
   'fx_impact.png': impact,
+  'fx_explosion.png': explosion,
+  'fx_muzzle.png': muzzle,
+  'fx_tracer.png': tracer,
+  'key_title.png': keyTitle,
+  ...Object.fromEntries(Object.keys(RELIC).map((id) => [`icon_relic_${id}.png`, () => relicIcon(id)])),
   'structure_ai-node_stage1.png': () => node(1),
   'structure_ai-node_stage2.png': () => node(2),
   'structure_ai-node_stage3.png': () => node(3),

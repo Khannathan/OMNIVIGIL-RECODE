@@ -1,6 +1,7 @@
 // Local saves, one slot per seed. A save holds only the dynamic state: the
 // map is regrown from the seed on load and checked against a checksum.
 
+import { Rng } from '../sim/rng';
 import { GameState, STATE_VERSION } from '../sim/state';
 import { WORLDGEN_VERSION } from '../sim/worldgen';
 
@@ -82,11 +83,22 @@ export function serialize(state: GameState, worldName: string): string {
 export function deserialize(text: string): { state: GameState; file: SaveFile } {
   const file = JSON.parse(text) as SaveFile;
   if (file.format !== 'omnivigil-save') throw new Error('Not an OMNIVIGIL save');
+  if (file.stateVersion === 2) migrateV2(file);
   if (file.stateVersion !== STATE_VERSION) {
     throw new Error(`Save is version ${file.stateVersion}, this build reads ${STATE_VERSION}`);
   }
   const state: GameState = { ...file.state, explored: fromBase64(file.state.explored) };
   return { state, file };
+}
+
+/** v2 (M1) -> v3 (M2): ruin salvage and relics. Old runs keep going. */
+function migrateV2(file: SaveFile): void {
+  const st = file.state as SaveFile['state'] & Partial<Pick<GameState, 'relics' | 'salvaged'>>;
+  st.relics ??= [];
+  st.salvaged ??= [];
+  const rng = st.rng as Partial<GameState['rng']>;
+  rng.loot ??= Rng.stream(st.seed, 'loot').state();
+  file.stateVersion = 3;
 }
 
 export function saveGame(state: GameState, worldName: string, store = defaultStore()): void {
