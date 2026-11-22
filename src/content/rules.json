@@ -1,0 +1,51 @@
+{
+  "_doc": "Tuning numbers for the M1 rules, kept in one place for balancing. Percentages are whole numbers (25 = +25%).",
+  "start": { "matter": 30, "compute": 30, "influence": 10 },
+  "research": { "energy": 2 },
+  "growth": { "nodeStageComputeEarned": [0, 80, 300], "cityGrowEvery": 18, "cityMaxStage": 3 },
+  "heal": { "base": 10, "inSettlement": 20 },
+  "combat": {
+    "baseDamage": 20,
+    "minDamage": 6,
+    "maxDamage": 60,
+    "settlementDefensePct": 50,
+    "embarkedDefensePct": -25,
+    "embarkCost": 2
+  },
+  "walls": { "node": 8, "city": 4, "perStage": 2, "healPerCycle": 15, "hpAfterCapture": 50 },
+  "influence": { "node": 1, "city": 2 },
+  "diplomacy": {
+    "swayCost": 20,
+    "swayGain": 12,
+    "peaceCost": 40,
+    "peaceMinAttitude": -40,
+    "peaceAttitudeAfter": -20,
+    "inciteCost": 30,
+    "inciteMinAttitude": 0,
+    "warThreshold": -50,
+    "trespassPerUnit": -1,
+    "driftPerCycle": 1,
+    "attackedOthers": -8,
+    "cityTakenOthers": -10
+  },
+  "factions": {
+    "townsMin": 1,
+    "townsMax": 2,
+    "capitalMinDistFromPlayer": 9,
+    "capitalMinDistApart": 10,
+    "townMaxDistFromCapital": 6,
+    "territoryRadius": 2,
+    "prodBase": 2,
+    "prodPerStage": 1,
+    "unitCapBase": 2,
+    "unitCapPerCity": 2,
+    "garrisonCapital": 2,
+    "garrisonTown": 1,
+    "escalationPerCyclePct": 0.4,
+    "escalationCapPct": 40,
+    "warChance": 0.015,
+    "peaceChance": 0.04,
+    "attackOdds": 0.45,
+    "huntRadius": 7
+  }
+}

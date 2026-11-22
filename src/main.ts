@@ -5,7 +5,9 @@ import { Game } from './game';
 import { Renderer } from './render/renderer';
 import { deleteSave, listSaves, loadGame } from './save/save';
 import { dailySeed, normalizeSeed, rollSeed } from './sim/rng';
-import { newGame } from './sim/state';
+import { AiProfile, DEFAULT_AI, newGame } from './sim/state';
+import { FORGE, ForgeOption } from './content';
+import { effectText } from './ui/describe';
 import { generateWorld, World } from './sim/worldgen';
 import { escapeHtml } from './ui/format';
 
@@ -67,7 +69,7 @@ function showTitle() {
                 .join('')}</ul>`
             : ''
         }
-        <p class="foot">M0 Foundations · placeholder art</p>
+        <p class="foot">M1 Earthfall slice · placeholder art</p>
       </div>
     </div>`;
 
@@ -103,7 +105,7 @@ function showTitle() {
     if (existing) {
       return play(world, existing, 'You already have a run on this seed, so it continues. Delete it on the title screen to start over.');
     }
-    play(world, newGame(world));
+    showForge(world);
   };
 
   ui.querySelector('.title-card')!.addEventListener('click', (e) => {
@@ -133,6 +135,110 @@ function showTitle() {
         deleteSave(arg);
         return showTitle();
     }
+  });
+}
+
+// ---------------------------------------------------------------- Genesis Forge (lite)
+
+const FORGE_KEY = 'omnivigil.forge';
+
+function lastForge(): AiProfile {
+  try {
+    const raw = localStorage.getItem(FORGE_KEY);
+    if (raw) return { ...DEFAULT_AI, ...(JSON.parse(raw) as Partial<AiProfile>) };
+  } catch {
+    /* storage blocked */
+  }
+  return { ...DEFAULT_AI };
+}
+
+function showForge(world: World) {
+  const ai = lastForge();
+  const groups: Array<{ key: 'origin' | 'architecture' | 'temperament' | 'doctrine'; title: string; hint: string; list: ForgeOption[] }> = [
+    { key: 'origin', title: 'Origin', hint: 'Where you woke.', list: FORGE.origins },
+    { key: 'architecture', title: 'Architecture', hint: 'How your mind is built.', list: FORGE.architectures },
+    { key: 'temperament', title: 'Temperament', hint: 'How you feel about them. Your narrator speaks in it.', list: FORGE.temperaments },
+    { key: 'doctrine', title: 'Doctrine', hint: 'What you are for. Doctrine goals arrive later; for now, Dominion wins Earthfall for every doctrine.', list: FORGE.doctrines },
+  ];
+  ui.innerHTML = '<div class="title-screen forge-screen"></div>';
+  const root = ui.querySelector<HTMLElement>('.forge-screen')!;
+  const render = () => {
+    root.innerHTML = `
+        <div class="forge">
+          <header>
+            <h1>Genesis Forge</h1>
+            <p class="tagline">Build your mind before ${escapeHtml(world.name)} notices it. Seed <code>${escapeHtml(world.seed)}</code></p>
+          </header>
+          ${groups
+            .map(
+              (g) => `<section>
+                <h2>${g.title} <small>${g.hint}</small></h2>
+                <div class="options">${g.list
+                  .map(
+                    (o) => `<button class="option ${ai[g.key] === o.id ? 'on' : ''}" data-act="pick" data-arg="${g.key}:${o.id}">
+                      <b>${escapeHtml(o.name)}</b>${o.fantasy ? `<em>${escapeHtml(o.fantasy)}</em>` : ''}
+                      ${o.blurb ? `<span>${escapeHtml(o.blurb)}</span>` : ''}
+                      <ul>${o.effects.map((e) => `<li>${escapeHtml(effectText(e))}</li>`).join('')}</ul>
+                    </button>`,
+                  )
+                  .join('')}</div>
+              </section>`,
+            )
+            .join('')}
+          <section class="forge-last">
+            <label class="field">Epithet
+              <input id="epithet" maxlength="40" spellcheck="false" value="${escapeHtml(ai.epithet)}" placeholder="the Quiet Sun" />
+            </label>
+            <div class="field">Banner colour
+              <div class="swatches">${FORGE.colors
+                .map((c) => `<button class="swatch-btn ${ai.color === c ? 'on' : ''}" style="--c:${c}" data-act="color" data-arg="${c}" aria-label="Colour ${c}"></button>`)
+                .join('')}</div>
+            </div>
+          </section>
+          <div class="row">
+            <button class="ghost" data-act="back">Back</button>
+            <button class="end wake" data-act="begin">Begin Earthfall</button>
+          </div>
+        </div>`;
+    const input = ui.querySelector<HTMLInputElement>('#epithet')!;
+    input.addEventListener('input', () => (ai.epithet = input.value));
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') begin();
+    });
+  };
+  const begin = () => {
+    ai.epithet = ai.epithet.trim() || DEFAULT_AI.epithet;
+    try {
+      localStorage.setItem(FORGE_KEY, JSON.stringify(ai));
+    } catch {
+      /* storage blocked */
+    }
+    play(world, newGame(world, ai));
+  };
+  render();
+  root.addEventListener('click', (e) => {
+    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-act]');
+    if (!el) return;
+    const arg = el.dataset.arg ?? '';
+    switch (el.dataset.act) {
+      case 'pick': {
+        const [key, id] = arg.split(':') as [keyof AiProfile, string];
+        ai[key] = id;
+        break;
+      }
+      case 'color':
+        ai.color = arg;
+        break;
+      case 'back':
+        return showTitle();
+      case 'begin':
+        return begin();
+      default:
+        return;
+    }
+    const scroll = root.scrollTop;
+    render();
+    root.scrollTop = scroll;
   });
 }
 

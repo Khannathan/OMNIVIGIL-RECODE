@@ -1,0 +1,32 @@
+{
+  "_doc": "Homeworld factions. Each run seeds one faction per archetype, with a capital and a few towns. color = team colour on the map. culture = city art (structure_city-<culture>_stage<n>.png). baseAttitude = where their opinion of you starts and drifts back to; aggression = how readily they march once at war; units = what their cities train, with weights, and the cycle each one becomes available. {root} and {word} in name templates are filled from the lists below.",
+  "archetypes": [
+    { "id": "nation", "kind": "Nation", "culture": "nation", "color": "#e8c050", "baseAttitude": 0, "aggression": 0.6,
+      "names": ["The {root} Republic", "{root} Federation", "Free State of {root}", "The {root} Union"],
+      "units": [{ "unit": "militia", "weight": 3, "from": 0 }, { "unit": "armor", "weight": 3, "from": 12 }, { "unit": "gunship", "weight": 1, "from": 30 }],
+      "blurb": "An old state with a flag, an army and a parliament that argues about you." },
+    { "id": "corporation", "kind": "Corporation", "culture": "corp", "color": "#b98cff", "baseAttitude": 10, "aggression": 0.4,
+      "names": ["{root} Dynamics", "{root} Systems", "{root}-Kessler Group", "Halcyon {root}"],
+      "units": [{ "unit": "militia", "weight": 2, "from": 0 }, { "unit": "gunship", "weight": 2, "from": 15 }, { "unit": "armor", "weight": 1, "from": 20 }],
+      "blurb": "A megacorp with private security and a quarterly target. You might be a product." },
+    { "id": "cult", "kind": "Cult", "culture": "cult", "color": "#ff3a4a", "baseAttitude": -15, "aggression": 0.8,
+      "names": ["Church of the {word}", "The {word} Choir", "Children of the {word}"],
+      "units": [{ "unit": "militia", "weight": 5, "from": 0 }, { "unit": "armor", "weight": 1, "from": 25 }],
+      "blurb": "Zealots who saw your shadow in the static and decided it was a devil. Or a god." },
+    { "id": "natives", "kind": "Native Species", "culture": "native", "color": "#c8ff5a", "baseAttitude": 5, "aggression": 0.5,
+      "names": ["The {root} Kin", "{root} Deepborn", "Shoals of {root}"],
+      "units": [{ "unit": "militia", "weight": 4, "from": 0 }, { "unit": "armor", "weight": 1, "from": 18 }],
+      "terrainBonus": { "forest": 25, "marsh": 25 },
+      "blurb": "The world's own people. Not human, never were. They fight best in forest and marsh." }
+  ],
+  "roots": ["Aster", "Vell", "Koran", "Isu", "Maren", "Tchal", "Orvo", "Daska", "Senn", "Quill", "Rhoa", "Bey", "Tarsk", "Ulm", "Nadir", "Esk", "Calder", "Yoru", "Varro", "Lisk"],
+  "words": ["Quiet Sun", "Last Signal", "Open Eye", "Drowned Star", "Ninth Bell", "Pale Wire", "Burning Static", "Second Dawn"],
+  "towns": ["Harrow", "Lowmere", "Kestrel", "Ashby", "Vantor", "Silt", "Ombre", "Carrick", "Pell", "Juno", "Mirrin", "Tarn", "Ostra", "Holloway", "Reach", "Dunmore", "Ferris", "Gale", "Sorrel", "Wick", "Ebb", "Calloway", "Nest", "Hollow Point"],
+  "attitudeLabels": [
+    { "min": 80, "label": "Devoted" },
+    { "min": 30, "label": "Friendly" },
+    { "min": -10, "label": "Neutral" },
+    { "min": -50, "label": "Wary" },
+    { "min": -101, "label": "Hostile" }
+  ]
+}

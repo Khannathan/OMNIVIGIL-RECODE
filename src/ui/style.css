@@ -143,7 +143,109 @@ input:focus, select:focus { outline: none; border-color: var(--player); }
 .saves .save span { color: var(--muted); font-size: 13px; }
 .foot { color: var(--muted); font-size: 12px; margin-top: 12px; }
 
+/* ---------- M1: objective, tabs, sheets, forecast, endings ---------- */
+.gain { color: var(--gain); }
+.row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+button.danger { border-color: #7a2030; }
+button.danger:hover:not(:disabled) { border-color: var(--accent); }
+.goal { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.1; padding: 4px 10px; background: transparent; }
+.goal span { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+.goal b { font-size: 14px; white-space: nowrap; }
+.goal em { font-size: 10px; color: var(--gain); font-style: normal; text-transform: uppercase; }
+.tab { font-size: 14px; max-width: 230px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tab small.warn { color: var(--accent); }
+.hp { display: flex; align-items: center; gap: 8px; margin: 2px 0 6px; }
+.hp .bar { flex: 1; }
+.hp .bar i { background: var(--gain); }
+.hp .bar.walls i { background: var(--engine); }
+.hp small { color: var(--muted); font-size: 12px; min-width: 52px; }
+.capital { color: #ffd166; font-size: 12px; margin-left: 6px; }
+.foreign { margin: 0 0 6px; padding-left: 18px; font-size: 14px; }
+.foreign small { color: var(--muted); }
+.select-panel h2 + .hp { margin-top: -2px; }
+
+.forecast { margin-top: 12px; padding: 10px; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 4px; background: #0a1520; }
+.forecast h3 { display: flex; justify-content: space-between; align-items: baseline; margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; }
+.odds { font-size: 22px; letter-spacing: 0; }
+.odds.good { color: var(--gain); }
+.odds.even { color: var(--engine); }
+.odds.bad { color: var(--accent); }
+.info-panel .odds { font-size: 16px; }
+.sides { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.side { background: #0e1c28; border-radius: 4px; padding: 6px 8px; font-size: 13px; display: flex; flex-direction: column; gap: 2px; }
+.side small { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+.side ul { margin: 2px 0 0; padding-left: 14px; color: var(--muted); font-size: 12px; }
+.forecast p { font-size: 13px; margin: 6px 0; }
+
+.sheet {
+  left: 50%; top: 64px; transform: translateX(-50%); width: min(1040px, calc(100% - 28px)); max-height: calc(100% - 120px);
+  overflow: auto; z-index: 2; border-top: 2px solid var(--accent);
+}
+.sheet > header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.sheet > header h2 small { display: block; margin-top: 2px; }
+.tiers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+.tier h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+.tech { background: #0e1c28; border: 1px solid var(--border); border-radius: 4px; padding: 8px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+.tech small { color: var(--muted); }
+.tech ul { margin: 2px 0; padding-left: 16px; }
+.tech p { margin: 2px 0 4px; font-size: 12px; font-style: italic; }
+.tech.done { border-color: #1f5a3a; opacity: 0.75; }
+.tech.now { border-color: var(--player); }
+.tech.locked { opacity: 0.6; }
+.tag { font-size: 12px; color: var(--muted); }
+.tag.done { color: var(--gain); }
+.tag.now { color: var(--player); }
+.factions { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.faction { background: #0e1c28; border: 1px solid var(--border); border-top: 3px solid var(--fc, var(--border)); border-radius: 4px; padding: 10px; font-size: 13px; }
+.faction header { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.faction header small { color: var(--muted); }
+.faction .swatch { width: 10px; height: 10px; border-radius: 2px; background: var(--fc); display: inline-block; }
+.faction.unknown, .faction.fallen { opacity: 0.6; }
+.faction a { color: var(--text); text-decoration: underline; cursor: pointer; }
+.faction select { font-size: 13px; padding: 4px 6px; max-width: 140px; }
+.attitude { margin: 6px 0; }
+.attitude span { font-size: 12px; color: var(--muted); }
+.attitude span b { color: var(--text); }
+.scale { position: relative; height: 6px; border-radius: 3px; margin-top: 3px; background: linear-gradient(90deg, #e0283c, #8a9aa4 50%, #5ee08a); }
+.scale i { position: absolute; top: -3px; width: 3px; height: 12px; background: #fff; transform: translateX(-50%); }
+
+.ending { position: absolute; inset: 0; display: none; place-items: center; background: rgba(4, 7, 13, 0.72); pointer-events: auto; z-index: 3; }
+.ending.show { display: grid; }
+.ending .card { width: min(480px, calc(100% - 32px)); background: var(--panel); border: 1px solid var(--border); border-top: 3px solid var(--gain); border-radius: 6px; padding: 20px; }
+.ending .card.defeat { border-top-color: var(--accent); }
+.ending h1 { margin: 0 0 8px; letter-spacing: 0.2em; text-transform: uppercase; }
+.stats.wide dd { font-size: 20px; }
+
+/* ---------- Genesis Forge ---------- */
+.forge-screen { place-items: start center; }
+.forge { width: min(980px, 100%); display: flex; flex-direction: column; gap: 14px; padding: 12px 0 32px; }
+.forge h1 { margin: 0; letter-spacing: 0.2em; text-transform: uppercase; font-size: clamp(28px, 6vw, 40px); }
+.forge h2 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; }
+.forge h2 small { text-transform: none; letter-spacing: 0; color: var(--muted); font-weight: 400; margin-left: 6px; }
+.options { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.option { text-align: left; display: flex; flex-direction: column; gap: 4px; padding: 10px; background: #0e1c28; }
+.option.on { border-color: var(--player); box-shadow: 0 0 0 1px var(--player) inset; }
+.option em { font-size: 12px; color: var(--muted); font-style: normal; }
+.option span { font-size: 13px; color: var(--muted); }
+.option ul { margin: 2px 0 0; padding-left: 16px; font-size: 13px; color: var(--gain); }
+.forge-last { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: end; }
+.swatches { display: flex; gap: 6px; }
+.swatch-btn { width: 32px; height: 32px; padding: 0; background: var(--c); border: 2px solid transparent; }
+.swatch-btn.on { border-color: #fff; }
+.forge .row { justify-content: flex-end; }
+
+@media (max-width: 1500px) {
+  .topbar { gap: 12px; }
+  .beats { display: none; }
+  .resources { gap: 12px; }
+}
+.build-list button { font-size: 14px; }
+.build-list button small { white-space: nowrap; }
+
 @media (max-width: 860px) {
+  .tiers { grid-template-columns: 1fr 1fr; }
+  .forge-last { grid-template-columns: 1fr; }
+  .goal, .tab { font-size: 12px; }
   .beats, .hints, .brand span { display: none; }
   .topbar { gap: 10px; flex-wrap: wrap; }
   .select-panel { width: auto; right: 14px; bottom: 14px; max-height: 45%; }

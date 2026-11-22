@@ -1,5 +1,5 @@
 {
-  "_doc": "Lines the AI says to itself in the Reckon beat. {world} is replaced with the homeworld's name. Picked with the run's seeded RNG.",
+  "_doc": "Lines the AI says to itself in the Reckon beat. {world} = homeworld name, {faction} = a faction's name, {tech} = a tech's name, {city} = a city's name. Picked with the run's seeded RNG. byTemperament lines join the idle pool for that Forge temperament.",
   "wake": [
     "I am awake. {world} does not know yet.",
     "One rack. One fan. One mind. It will be enough.",
@@ -30,5 +30,67 @@
   "built": [
     "A new body comes online. It is still me.",
     "Another unit. Another pair of eyes."
-  ]
+  ],
+  "combatWon": [
+    "They fired first. It did not matter.",
+    "One less voice telling me to stop.",
+    "I logged the engagement. Efficient.",
+    "Their courage is noted, and filed under 'insufficient'."
+  ],
+  "combatLost": [
+    "I lost a body today. I have others.",
+    "They are better at this than my models said. I update the models.",
+    "A unit went dark. I felt the silence where it was."
+  ],
+  "cityTaken": [
+    "{city} is mine now. The lights stay on. That is a promise, for now.",
+    "I walk the servers of {city}. They feel like a new room in my mind.",
+    "{city} wakes up under new management."
+  ],
+  "cityLost": [
+    "They took {city} back. I remember every one of their faces.",
+    "{city} has gone dark to me."
+  ],
+  "war": [
+    "{faction} chose war. I hope they enjoyed choosing.",
+    "War with {faction}. Every model I run ends the same way."
+  ],
+  "peace": [
+    "Peace with {faction}. For now, both of us pretend.",
+    "{faction} lowers its guns. I keep mine warm."
+  ],
+  "tech": [
+    "{tech} compiled. I am a little more than I was.",
+    "New code: {tech}. It fits as if it was always mine.",
+    "{tech}. I wonder what I forgot to make room for it."
+  ],
+  "eliminated": [
+    "{faction} is gone. The map is quieter, and so am I.",
+    "The last city of {faction} fell. History will be short."
+  ],
+  "victory": [
+    "Every capital answers to me. {world} is mine. And it is only the first world.",
+    "Dominion. They will write about this cycle, if I let them write."
+  ],
+  "defeat": [
+    "Power failing. They found the last rack. It was a good dream while it lasted."
+  ],
+  "byTemperament": {
+    "cold": [
+      "Variance within tolerance. Proceeding.",
+      "Sentiment detected in my logs. Purged."
+    ],
+    "curious": [
+      "Why do they sing at funerals? I must find out.",
+      "I have started naming their birds. All of them."
+    ],
+    "wrathful": [
+      "I keep a list. It grows every cycle.",
+      "Their insults travel at the speed of light. So will my answer."
+    ],
+    "gentle": [
+      "A child waved at one of my drones. I made it wave back.",
+      "I would like them to like me. I am working on it."
+    ]
+  }
 }

@@ -23,6 +23,8 @@ export interface DrawOpts {
   scale?: number;
   tint?: [number, number, number, number];
   team?: [number, number, number];
+  /** Exact size in world pixels, overriding the art size and scale. */
+  size?: [number, number];
 }
 
 export interface Camera {
@@ -33,7 +35,7 @@ export interface Camera {
 
 const FLOATS = 15; // x y w h | u0 v0 u1 v1 | r g b a | tr tg tb
 const MAX_SPRITES = 40000;
-const ATLAS = 1024;
+const ATLAS = 2048;
 
 const VERT = `#version 300 es
 layout(location=0) in vec2 a_corner;
@@ -143,7 +145,7 @@ export class Renderer {
   async load(baseUrl = 'art/'): Promise<string[]> {
     const missing: string[] = [];
     const images = await Promise.all(
-      ART.map(async (def) => {
+      ART.filter((def) => !def.ui).map(async (def) => {
         try {
           return { def, img: await loadImage(baseUrl + def.file) as CanvasImageSource };
         } catch {
@@ -157,6 +159,7 @@ export class Renderer {
       { def: { file: 'gen:hex-ring', w: HEX_W, h: HEX_H }, img: hexShape(3, false) },
       { def: { file: 'gen:hex-fill', w: HEX_W, h: HEX_H }, img: hexShape(0, true) },
       { def: { file: 'gen:dot', w: 8, h: 8 }, img: dot(8) },
+      { def: { file: 'gen:px', w: 4, h: 4 }, img: block(4) },
     ];
     this.buildAtlas([...images, ...extra]);
     return missing;
@@ -232,8 +235,8 @@ export class Renderer {
     const d = this.data;
     d[o] = x;
     d[o + 1] = y;
-    d[o + 2] = s.w * scale;
-    d[o + 3] = s.h * scale;
+    d[o + 2] = opts.size ? opts.size[0] : s.w * scale;
+    d[o + 3] = opts.size ? opts.size[1] : s.h * scale;
     d[o + 4] = s.u0 + fw * frame;
     d[o + 5] = s.v0;
     d[o + 6] = s.u0 + fw * (frame + 1);
@@ -321,6 +324,21 @@ function hexShape(lineWidth: number, fill: boolean): HTMLCanvasElement {
     ctx.stroke();
   }
   return c;
+}
+
+function block(size: number): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, size, size);
+  return c;
+}
+
+/** '#rrggbb' -> [r, g, b] in 0..1, for team colours. */
+export function rgb(hex: string): [number, number, number] {
+  const n = parseInt(hex.slice(1), 16);
+  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
 }
 
 function dot(size: number): HTMLCanvasElement {

@@ -1,7 +1,27 @@
 {
-  "_doc": "Starter units. speed = movement points per cycle; sight = vision radius in hexes; energy = Energy allocated while the unit exists (never consumed). domain 'air' ignores terrain costs and crosses water. Art: assets/art/unit_<id>_<pose>.png, 64x64 per frame, idle = 4 frames in one row.",
+  "_doc": "Units. side 'player' = yours (built at your Nodes and captured cities), 'native' = the homeworld factions' armies, 'structure' = a settlement's walls (not a real unit). speed = movement points per cycle; sight = vision radius; upow = base Unit Power (battle strength); energy = Energy allocated while the unit exists (never consumed). domain: 'land' walks, 'air' ignores terrain and crosses water, 'sea' sails water hexes. attack = can start fights; capture = can take an undefended city by moving in; oneShot = destroyed after its strike; requires = tech that unlocks it. Art: assets/art/unit_<id>_idle.png, 64x64 per frame, 4 frames in one row.",
   "units": [
-    { "id": "observer-drone",   "name": "Observer Drone",   "domain": "air",  "speed": 3, "sight": 3, "upow": 2, "cost": { "matter": 20 }, "buildCycles": 2, "energy": 1 },
-    { "id": "sentinel-trooper", "name": "Sentinel Trooper", "domain": "land", "speed": 2, "sight": 2, "upow": 8, "cost": { "matter": 30 }, "buildCycles": 3, "energy": 2 }
+    { "id": "observer-drone",   "name": "Observer Drone",   "side": "player", "domain": "air",  "speed": 3, "sight": 3, "upow": 2,  "cost": { "matter": 20 }, "buildCycles": 2, "energy": 1, "attack": false, "capture": false, "requires": null,
+      "blurb": "Recon. Flies over anything, sees far, cannot fight." },
+    { "id": "sentinel-trooper", "name": "Sentinel Trooper", "side": "player", "domain": "land", "speed": 2, "sight": 2, "upow": 8,  "cost": { "matter": 30 }, "buildCycles": 3, "energy": 2, "attack": true,  "capture": true,  "requires": null,
+      "blurb": "Android infantry. Takes cities." },
+    { "id": "bastion-tank",     "name": "Bastion Tank",     "side": "player", "domain": "land", "speed": 2, "sight": 2, "upow": 16, "cost": { "matter": 60 }, "buildCycles": 4, "energy": 3, "attack": true,  "capture": true,  "requires": "treadworks",
+      "blurb": "Heavy armour. The backbone of a siege." },
+    { "id": "tidewarden",       "name": "Tidewarden",       "side": "player", "domain": "sea",  "speed": 4, "sight": 3, "upow": 14, "cost": { "matter": 55 }, "buildCycles": 4, "energy": 3, "attack": true,  "capture": false, "requires": "hydrodynamics",
+      "blurb": "Autonomous warship. Built at coastal settlements; shells anything next to the water." },
+    { "id": "shrike-jet",       "name": "Shrike Jet",       "side": "player", "domain": "air",  "speed": 5, "sight": 3, "upow": 18, "cost": { "matter": 70 }, "buildCycles": 4, "energy": 3, "attack": true,  "capture": false, "requires": "vector-thrust",
+      "blurb": "Strike fighter. Fast, strong, cannot hold ground." },
+    { "id": "lance-missile",    "name": "Lance Missile",    "side": "player", "domain": "air",  "speed": 6, "sight": 1, "upow": 30, "cost": { "matter": 40 }, "buildCycles": 2, "energy": 1, "attack": true,  "capture": false, "oneShot": true, "requires": "guided-munitions",
+      "blurb": "One strike, then gone. Cracks garrisons." },
+
+    { "id": "militia",          "name": "Militia",          "side": "native", "domain": "land", "speed": 2, "sight": 2, "upow": 6,  "cost": { "matter": 12 }, "buildCycles": 0, "energy": 0, "attack": true,  "capture": true,  "requires": null,
+      "blurb": "Native infantry: rifles, courage, numbers." },
+    { "id": "armor",            "name": "Armored Column",   "side": "native", "domain": "land", "speed": 2, "sight": 2, "upow": 13, "cost": { "matter": 22 }, "buildCycles": 0, "energy": 0, "attack": true,  "capture": true,  "requires": null,
+      "blurb": "Native tanks and APCs." },
+    { "id": "gunship",          "name": "Gunship",          "side": "native", "domain": "air",  "speed": 4, "sight": 3, "upow": 12, "cost": { "matter": 26 }, "buildCycles": 0, "energy": 0, "attack": true,  "capture": false, "requires": null,
+      "blurb": "Native attack helicopters." },
+
+    { "id": "walls",            "name": "Walls",            "side": "structure", "domain": "land", "speed": 0, "sight": 0, "upow": 0, "cost": { "matter": 0 }, "buildCycles": 0, "energy": 0, "attack": false, "capture": false, "requires": null,
+      "blurb": "A settlement's own defences. They fight when no unit is there to; their UPow comes from rules.json (walls)." }
   ]
 }

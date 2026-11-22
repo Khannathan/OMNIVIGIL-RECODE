@@ -1,16 +1,34 @@
 // A* over the hex map. Deterministic: ties break on tile index.
 
-import { TERRAIN, UnitDef } from '../content';
+import { RULES, TERRAIN, UnitDef } from '../content';
 import { distance, GridSize, neighbors } from './hex';
 
 export interface MapView extends GridSize {
   terrain: Uint8Array;
 }
 
+export interface MoveOpts {
+  /** Land units may cross coast and shallow sea (Hydrodynamics). */
+  embark?: boolean;
+  /** Tiles the route may not pass through (it may still end on one). */
+  blocked?: Set<number>;
+}
+
+const EMBARKABLE = new Set(TERRAIN.map((t, i) => (t.id === 'coast' || t.id === 'shallow-sea' ? i : -1)).filter((i) => i >= 0));
+const SAILABLE = new Set(TERRAIN.map((t, i) => (t.water && t.id !== 'rift' ? i : -1)).filter((i) => i >= 0));
+
 /** Cost to enter a tile, or null when the unit can't go there. */
-export function enterCost(def: UnitDef, terrain: number): number | null {
+export function enterCost(def: Pick<UnitDef, 'domain'>, terrain: number, opts?: MoveOpts): number | null {
   if (def.domain === 'air') return 1;
-  return TERRAIN[terrain].moveCost;
+  if (def.domain === 'sea') return SAILABLE.has(terrain) ? 1 : null;
+  const c = TERRAIN[terrain].moveCost;
+  if (c === null && opts?.embark && EMBARKABLE.has(terrain)) return RULES.combat.embarkCost;
+  return c;
+}
+
+/** A land unit standing on water (embarked). */
+export function isEmbarked(def: Pick<UnitDef, 'domain'>, terrain: number): boolean {
+  return def.domain === 'land' && TERRAIN[terrain].water;
 }
 
 /**
@@ -20,13 +38,14 @@ export function enterCost(def: UnitDef, terrain: number): number | null {
  */
 export function findPath(
   map: MapView,
-  def: UnitDef,
+  def: Pick<UnitDef, 'domain'>,
   from: number,
   to: number,
   known?: Uint8Array,
+  opts?: MoveOpts,
 ): number[] | null {
   if (from === to) return [];
-  if (enterCost(def, map.terrain[to]) === null) return null;
+  if (enterCost(def, map.terrain[to], opts) === null) return null;
   if (known && !known[to]) return null;
 
   const g = new Map<number, number>([[from, 0]]);
@@ -73,7 +92,8 @@ export function findPath(
     const base = g.get(cur)!;
     for (const nb of neighbors(cur, map)) {
       if (known && !known[nb]) continue;
-      const c = enterCost(def, map.terrain[nb]);
+      if (nb !== to && opts?.blocked?.has(nb)) continue;
+      const c = enterCost(def, map.terrain[nb], opts);
       if (c === null) continue;
       const ng = base + c;
       if (ng < (g.get(nb) ?? Infinity)) {
@@ -93,11 +113,11 @@ export function findPath(
  * How far along a route a unit gets this cycle. Civ rule: a unit with full
  * movement can always take one step, even into costly terrain.
  */
-export function stepsThisCycle(map: MapView, def: UnitDef, route: number[]): number {
+export function stepsThisCycle(map: MapView, def: Pick<UnitDef, 'domain' | 'speed'>, route: number[], opts?: MoveOpts): number {
   let mp = def.speed;
   let steps = 0;
   for (const tile of route) {
-    const c = enterCost(def, map.terrain[tile]);
+    const c = enterCost(def, map.terrain[tile], opts);
     if (c === null) break;
     if (c > mp && mp < def.speed) break;
     mp -= c;
