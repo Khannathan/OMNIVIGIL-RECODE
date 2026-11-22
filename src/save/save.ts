@@ -84,6 +84,7 @@ export function deserialize(text: string): { state: GameState; file: SaveFile } 
   const file = JSON.parse(text) as SaveFile;
   if (file.format !== 'omnivigil-save') throw new Error('Not an OMNIVIGIL save');
   if (file.stateVersion === 2) migrateV2(file);
+  if (file.stateVersion === 3) migrateV3(file);
   if (file.stateVersion !== STATE_VERSION) {
     throw new Error(`Save is version ${file.stateVersion}, this build reads ${STATE_VERSION}`);
   }
@@ -99,6 +100,30 @@ function migrateV2(file: SaveFile): void {
   const rng = st.rng as Partial<GameState['rng']>;
   rng.loot ??= Rng.stream(st.seed, 'loot').state();
   file.stateVersion = 3;
+}
+
+/**
+ * v3 (M2) -> v4 (M3): Essence and Crypto, Exposure, rifts, the Mother,
+ * genes, the Ark, and a list of victories instead of one. Rifts are filled in
+ * from the regrown world on the next cycle (syncRifts), so the run goes on.
+ */
+function migrateV3(file: SaveFile): void {
+  type V3 = SaveFile['state'] & { victory?: { kind: 'dominion'; cycle: number } | null };
+  const st = file.state as V3;
+  st.resources.essence ??= 0;
+  st.resources.crypto ??= 0;
+  st.exposure ??= 0;
+  st.exposureMax ??= 0;
+  st.rifts ??= [];
+  st.mother ??= { retreats: 0, slain: false };
+  st.genes ??= [];
+  st.ark ??= { stage: 0, build: null };
+  st.victories ??= st.victory ? [{ kind: st.victory.kind, cycle: st.victory.cycle }] : [];
+  delete st.victory;
+  st.stats.kaijuSlain ??= 0;
+  const rng = st.rng as Partial<GameState['rng']>;
+  rng.abyss ??= Rng.stream(st.seed, 'abyss').state();
+  file.stateVersion = 4;
 }
 
 export function saveGame(state: GameState, worldName: string, store = defaultStore()): void {

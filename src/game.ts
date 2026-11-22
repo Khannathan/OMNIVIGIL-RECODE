@@ -3,37 +3,62 @@
 import {
   archetypeDef,
   attitudeLabel,
+  GENOME,
+  geneDef,
   relicDef,
   REWARDS,
   rarityDef,
   RULES,
+  strainDef,
+  StrainDef,
   structureDef,
   techDef,
   TECHS,
   TERRAIN,
+  TITANS,
+  TitanSlot,
+  TITAN_SLOTS,
+  titanParts,
+  titanType,
   unitDef,
   UNITS,
 } from './content';
 import { audio } from './audio/audio';
 import { Renderer } from './render/renderer';
 import { Cue, GameView } from './render/view';
-import { advise, adviceLine, Advice, goals, PHASES } from './sim/advisor';
+import { advise, adviceLine, Advice, goals, PHASES, SheetId } from './sim/advisor';
+import { isRiftGuard, MOTHER } from './sim/abyss';
+import { crusade, exposureFloor, exposureName } from './sim/exposure';
+import { forgeOpen, partsFor, partUnlocked, strongestTitan } from './sim/titans';
+import { allVictories, doctrineVictory, VICTORY_TITLES } from './sim/victory';
 import { revealsFor, RewardCard, salvageText } from './sim/rewards';
 import { saveGame } from './save/save';
 import { routeToStrike } from './sim/actions';
 import { bestDefender, forecast, Forecast, Side } from './sim/combat';
 import { queueOrder, resolveCycle, CycleReport, wakeLine, orderKey } from './sim/cycle';
 import { forgeOptions } from './sim/effects';
-import { pixelToIndex, worldPixelHeight, worldPixelWidth } from './sim/hex';
+import { distance, pixelToIndex, worldPixelHeight, worldPixelWidth } from './sim/hex';
 import { findPath, enterCost } from './sim/path';
 import {
+  ABYSS,
+  availableGenes,
   availableTechs,
   Beat,
   BEATS,
   buildableUnits,
+  canAfford,
   canEmbark,
   dominionProgress,
   energyBudget,
+  exposureLevel,
+  genomeOpen,
+  kaijuReady,
+  riftAt,
+  symbioteStat,
+  syncRifts,
+  titanBlocker,
+  unlockedStrains,
+  VictoryKind,
   factionById,
   GameEvent,
   GameState,
@@ -49,7 +74,7 @@ import {
   visibleTiles,
 } from './sim/state';
 import { World } from './sim/worldgen';
-import { effectText, pct, unlocksOf } from './ui/describe';
+import { costText, effectText, pct, unlocksOf } from './ui/describe';
 import { escapeHtml, formatAmount } from './ui/format';
 
 const MIN_ZOOM = 0.35;
@@ -62,7 +87,8 @@ const BEAT_LABEL: Record<Beat, string> = {
   reckon: 'Reckon',
 };
 
-type Sheet = 'tech' | 'factions' | null;
+type Sheet = SheetId | null;
+const BLUEPRINT_KEY = 'omnivigil.blueprint';
 
 const PREFS_KEY = 'omnivigil.prefs';
 interface Prefs {
@@ -97,7 +123,9 @@ export class Game {
   private moveMode = false;
   private menuOpen = false;
   private sheet: Sheet = null;
-  private ending: 'victory' | 'defeat' | null = null;
+  private ending: VictoryKind | 'defeat' | null = null;
+  /** The TBU being designed in the Titan Forge (a UI convenience, kept in localStorage). */
+  private blueprint: Record<TitanSlot, string> = loadBlueprint();
   private revealAll = false;
   private report: CycleReport | null = null;
   private queuedRoutes = new Map<number, number[]>();
@@ -129,6 +157,7 @@ export class Game {
     private onExit: () => void,
     notice?: string,
   ) {
+    syncRifts(state, world); // saves from before M3 learn where the rifts are
     this.view = new GameView(r, world);
     this.view.onCue = (cue: Cue, intensity?: number) => audio.play(cue, intensity);
     this.view.reduceMotion = this.prefs.reduceMotion;
@@ -306,7 +335,12 @@ export class Game {
         case 'node-razed':
           return e.name;
         case 'built':
+        case 'abyss-rise':
           return unitDef(e.unit).name;
+        case 'ravaged':
+          return e.name;
+        case 'essence':
+          return `+${e.amount} Essence`;
         default:
           return '';
       }
@@ -327,7 +361,7 @@ export class Game {
       const y = report.events.find((e) => e.kind === 'yield');
       const home = this.state.structures.find((x) => x.owner === PLAYER);
       if (y && y.kind === 'yield' && home) {
-        const bits = [y.compute ? `+${y.compute} Compute` : '', y.matter ? `+${y.matter} Matter` : '', y.influence ? `+${y.influence} Influence` : ''].filter(Boolean);
+        const bits = [y.compute ? `+${y.compute} Compute` : '', y.matter ? `+${y.matter} Matter` : '', y.influence ? `+${y.influence} Influence` : '', y.essence ? `+${y.essence} Essence` : '', y.crypto ? `+${y.crypto} Crypto` : ''].filter(Boolean);
         if (bits.length) this.view.addLabel(home.tile, bits.join('  '), y.brownout ? 'bad' : 'yield', 2.6, -52);
       }
       const cards = revealsFor(this.state, report.events);
@@ -423,7 +457,8 @@ export class Game {
       if (this.reveal?.open) return;
     }
     this.reveal = null;
-    if (this.report?.events.some((e) => e.kind === 'victory')) this.ending = 'victory';
+    const won = [...(this.report?.events ?? [])].reverse().find((e) => e.kind === 'victory');
+    if (won && won.kind === 'victory') this.ending = won.victory;
     if (this.report?.events.some((e) => e.kind === 'defeat')) this.ending = 'defeat';
     this.beat = 'sense';
     this.coreMode = isBrownout(this.state) ? 'glitch' : 'idle';
@@ -450,6 +485,8 @@ export class Game {
     }
     const s = structureAt(this.state, tile);
     if (s && s.owner !== PLAYER && this.state.explored[tile]) return s.owner;
+    const r = riftAt(this.state, tile);
+    if (r && !r.sealed && this.state.explored[tile]) return ABYSS;
     return null;
   }
 
@@ -679,6 +716,11 @@ export class Game {
       } else if (key === 'f') {
         this.sheet = this.sheet === 'factions' ? null : 'factions';
         this.refresh();
+      } else if (key === 't' || key === 'b' || key === 'o') {
+        const want: SheetId = key === 't' ? 'forge' : key === 'b' ? 'genome' : 'ops';
+        this.sheet = this.sheet === want ? null : want;
+        if (this.sheet) audio.play('ui-open');
+        this.refresh();
       } else if (key === '`' && import.meta.env.DEV) {
         // Dev only: see the whole map to judge worldgen.
         this.revealAll = !this.revealAll;
@@ -773,6 +815,36 @@ export class Game {
           if (!sel?.value) return;
           return this.give({ kind: 'incite', faction: arg, against: sel.value });
         }
+        case 'part': {
+          const [slot, id] = arg.split(':') as [TitanSlot, string];
+          this.blueprint = { ...this.blueprint, [slot]: id };
+          saveBlueprint(this.blueprint);
+          return this.refresh();
+        }
+        case 'build-titan':
+          this.selectedTile = this.state.structures.find((x) => x.id === Number(arg))?.tile ?? this.selectedTile;
+          return this.give({ kind: 'build', structureId: Number(arg), unit: titanType(this.blueprint) });
+        case 'load-blueprint': {
+          const parts = titanParts(arg);
+          if (parts) {
+            this.blueprint = Object.fromEntries(TITAN_SLOTS.map((k) => [k, parts[k].id])) as Record<TitanSlot, string>;
+            saveBlueprint(this.blueprint);
+          }
+          return this.refresh();
+        }
+        case 'sequence':
+          return this.give({ kind: 'sequence', gene: arg });
+        case 'fuse': {
+          const u = this.selected();
+          if (!u) return;
+          return this.give({ kind: 'fuse', unitId: u.id, strain: arg });
+        }
+        case 'scrub':
+          return this.give({ kind: 'scrub' });
+        case 'market':
+          return this.give({ kind: 'market', offer: arg });
+        case 'ark':
+          return this.give({ kind: 'ark', structureId: Number(arg) });
         case 'sheet':
           this.sheet = this.sheet === arg ? null : (arg as Sheet);
           if (this.sheet) audio.play('ui-open');
@@ -866,7 +938,7 @@ export class Game {
           <div class="rarity-flash" aria-hidden="true"></div>
           <div class="watch-bar"></div>
           <div class="toast" role="status"></div>
-          <footer class="hints">Drag or WASD to pan · Wheel to zoom · Click to select · Right-click to move or attack · M move · N next best move · R research · F factions · G grid · H home · Enter end cycle · Space skip</footer>
+          <footer class="hints">Drag or WASD to pan · Wheel to zoom · Click to select · Right-click to move or attack · M move · N next best move · R research · F factions · T Titan Forge · B genome · O operations · G grid · H home · Enter end cycle · Space skip</footer>
         </div>`;
     }
     this.advice = this.state.defeated ? [] : advise(this.state, this.world);
@@ -910,9 +982,15 @@ export class Game {
         <span class="res" title="Compute: spent to start research."><img src="art/icon_compute.png" alt="Compute" width="20" height="20" /><b>${formatAmount(s.resources.compute)}</b></span>
         <span class="res" title="Matter: spent to build units."><img src="art/icon_matter.png" alt="Matter" width="20" height="20" /><b>${formatAmount(s.resources.matter)}</b></span>
         <span class="res" title="Influence: spent on diplomacy (sway, peace, incite)."><img src="art/icon_influence.png" alt="Influence" width="20" height="20" /><b>${formatAmount(s.resources.influence)}</b></span>
+        <span class="res" title="Symbiotic Essence: living matter from Abyssians and rifts. Spent in the Genome Lab (B) on genes and symbiotes, and on rift-tuned TBU parts."><img src="art/icon_essence.png" alt="Symbiotic Essence" width="20" height="20" /><b>${formatAmount(s.resources.essence)}</b></span>
+        <span class="res" title="Crypto: the Agentic Guilds' currency. Spent on the black market, on scrubbing Exposure, and on premium TBU parts (Operations, O)."><img src="art/icon_crypto.png" alt="Crypto" width="20" height="20" /><b>${formatAmount(s.resources.crypto)}</b></span>
       </div>
+      ${this.exposureChip()}
       <button class="ghost tab ${this.sheet === 'tech' ? 'active' : ''}" data-act="sheet" data-arg="tech" title="Research (R)">${research}</button>
       <button class="ghost tab ${this.sheet === 'factions' ? 'active' : ''}" data-act="sheet" data-arg="factions" title="Factions (F)">Factions${atWar ? ` <small class="warn">${atWar} at war</small>` : ''}</button>
+      <button class="ghost tab ${this.sheet === 'forge' ? 'active' : ''}" data-act="sheet" data-arg="forge" title="Titan Forge: design and build TBUs (T)">Forge${forgeOpen(s) ? '' : ' <small>locked</small>'}</button>
+      <button class="ghost tab ${this.sheet === 'genome' ? 'active' : ''}" data-act="sheet" data-arg="genome" title="Genome Lab: genes and symbiotes (B)">Genome${genomeOpen(s) ? '' : ' <small>locked</small>'}</button>
+      <button class="ghost tab ${this.sheet === 'ops' ? 'active' : ''}" data-act="sheet" data-arg="ops" title="Operations: rifts, the Abyss Mother, the Ark, Exposure, the black market and every victory (O)">Ops${this.openRiftsSeen() ? ` <small class="warn">${this.openRiftsSeen()} rift${this.openRiftsSeen() > 1 ? 's' : ''}</small>` : ''}</button>
       <button class="end" data-act="end-cycle" ${this.canAct() && !this.ending ? '' : 'disabled'}>
         End Cycle${orders ? ` <small>${orders} order${orders > 1 ? 's' : ''}</small>` : ''}
       </button>
@@ -939,6 +1017,7 @@ export class Game {
   }
 
   private ownerName(owner: string): string {
+    if (owner === ABYSS) return 'The Abyss';
     return owner === PLAYER ? 'Yours' : factionById(this.state, owner)?.name ?? owner;
   }
 
@@ -968,8 +1047,14 @@ export class Game {
       else if (queued) status = `Ordered to move ${route.length} hex${route.length === 1 ? '' : 'es'}`;
       else if (unit.route.length) status = `En route, ${unit.route.length} hex${unit.route.length === 1 ? '' : 'es'} to go`;
       const disbanding = this.queued(`unit:${unit.id}`)?.kind === 'disband';
+      const tags = [
+        def.titan ? '<span class="utag titan" title="TBU: never suffers the kaiju penalty">Titan</span>' : '',
+        unit.symbiote ? `<span class="utag sym" title="${escapeHtml(strainDef(unit.symbiote).blurb)}">${escapeHtml(strainDef(unit.symbiote).name)} +${symbioteStat(s, unit, 'upowPct')}%</span>` : '',
+        !kaijuReady(unit) && def.attack ? '<span class="utag weak" title="Fights kaiju at the kaiju penalty. Build a TBU, or fuse a hardened symbiote.">−60% vs kaiju</span>' : '',
+      ].filter(Boolean).join('');
       parts.push(`
-        <h2>${def.name}${unit.tile !== tile ? ' <small>(selected)</small>' : ''}</h2>
+        <h2>${escapeHtml(def.name)}${unit.tile !== tile ? ' <small>(selected)</small>' : ''}</h2>
+        ${tags ? `<div class="utags">${tags}</div>` : ''}
         <div class="hp"><div class="bar"><i style="width:${unit.hp}%"></i></div><small>${unit.hp} HP</small></div>
         <dl class="stats">
           <div><dt>UPow</dt><dd>${def.upow}</dd></div>
@@ -978,6 +1063,7 @@ export class Game {
           <div><dt>Energy</dt><dd>${def.energy}</dd></div>
         </dl>
         <p class="muted">${escapeHtml(def.blurb)} ${disbanding ? '<b class="warn">Disbanding at End Cycle.</b>' : `${status}.`}</p>
+        ${this.fuseHint(unit)}
         <div class="row">
           <button data-act="move" class="${this.moveMode ? 'active' : ''}" ${this.canAct() ? '' : 'disabled'}>
             ${this.moveMode ? 'Pick a destination…' : 'Move (M)'}
@@ -998,9 +1084,16 @@ export class Game {
     }
     if (foreignHere.length) {
       parts.push(`<h2>${escapeHtml(this.ownerName(foreignHere[0].owner))}</h2><ul class="foreign">${foreignHere
-        .map((u) => `<li>${unitDef(u.type).name} <small>UPow ${unitDef(u.type).upow} · ${u.hp} HP</small></li>`)
+        .map((u) => {
+          const d = unitDef(u.type);
+          const kaiju = d.kaiju ? ' <b class="warn" title="Conventional units fight it at the kaiju penalty. TBUs and hardened symbiotes do not.">kaiju</b>' : '';
+          const drop = d.essence ? ` · ${d.essence} Essence` : '';
+          return `<li>${escapeHtml(d.name)}${kaiju} <small>UPow ${d.upow} · ${u.hp} HP${drop}</small>${u.owner === ABYSS ? `<br><small class="muted">${escapeHtml(d.blurb)}</small>` : ''}</li>`;
+        })
         .join('')}</ul>`);
     }
+    const rift = riftAt(s, tile);
+    if (rift && s.explored[tile]) parts.push(this.riftBlock(tile, !unit || this.target !== tile));
     if (settlement && (s.explored[tile] || settlement.owner === PLAYER)) parts.push(this.settlementBlock(settlement.id));
     if (!parts.length) {
       el.hidden = true;
@@ -1049,6 +1142,15 @@ export class Game {
               ${u.name} <small>${u.cost.matter} Matter · ${u.buildCycles} cycles · ${u.energy} Energy</small></button>`;
         })
         .join('')}</div>`;
+      if (node.type === 'ai-node') {
+        prod += forgeOpen(s)
+          ? `<button class="titan-btn" data-act="sheet" data-arg="forge">Design a TBU in the Titan Forge <small>T</small></button>`
+          : `<button disabled>Titan Battle Unit <small>needs ${escapeHtml(techDef(TITANS.requires).name)}</small></button>`;
+      }
+    }
+    if (s.ark.build?.structureId === node.id) {
+      const st = RULES.ark.stages[s.ark.stage];
+      if (st) prod += `<div class="build">Ark: <b>${escapeHtml(st.name)}</b><div class="bar"><i style="width:${(s.ark.build.progress / st.cycles) * 100}%"></i></div><small>${fmt(s.ark.build.progress)}/${st.cycles} cycles</small></div>`;
     }
     return `
       <h2>${escapeHtml(node.name)} <small>${def.name} · stage ${node.stage}</small>${capital}</h2>
@@ -1058,7 +1160,7 @@ export class Game {
   }
 
   private fc(unit: Unit, tile: number): Forecast | null {
-    const d = bestDefender(this.state, this.world, tile, PLAYER);
+    const d = bestDefender(this.state, this.world, tile, PLAYER, unit);
     return d ? forecast(this.state, this.world, unit, d) : null;
   }
 
@@ -1074,6 +1176,7 @@ export class Game {
     const confirm = this.canAct() && route !== null
       ? `<div class="row"><button class="${atWar ? '' : 'danger'}" data-act="attack">${atWar ? 'Attack' : `Declare war on ${escapeHtml(fname)} and attack`}</button><button class="ghost" data-act="aim-cancel">Cancel</button></div>`
       : '';
+    const guard = fc && isRiftGuard(fc.defender) ? (fc.defender.type === MOTHER ? (s.rifts.some((r) => !r.mother && !r.sealed) ? '<p class="muted">Beat her and she retreats deeper (big Essence), and comes back stronger. Seal every other rift first to kill her for good.</p>' : '<p class="gain">Every other rift is sealed. Beat her now and she dies: the Guardian victory.</p>') : '<p class="muted">Break the heart and the rift seals for good. Damage stays; it heals 10 HP a cycle.</p>') : '';
     if (!fc) {
       return `<div class="forecast"><h3>Forecast</h3><p>Nobody defends it. ${unitDef(unit.type).capture ? 'Move in to take it.' : 'Only a land unit can take it.'} ${reach}</p>${confirm}</div>`;
     }
@@ -1086,6 +1189,7 @@ export class Game {
         <p class="muted">Each round you win ${pct(fc.roundChance)} of the time and deal ${fc.attackerHit} damage; they deal ${fc.defenderHit}. The loser is destroyed.
         ${fc.winChance > 0 ? `If you win, about ${fc.attackerHpIfWin} HP left.` : ''} ${unitDef(unit.type).oneShot ? 'The missile is spent either way.' : ''}</p>
         <p>${reach}${atWar ? '' : ` <b class="warn">You are at peace with ${escapeHtml(fname)}: attacking declares war.</b>`}</p>
+        ${guard}
         ${confirm}
       </div>`;
   }
@@ -1122,8 +1226,12 @@ export class Game {
       const fc = this.fc(unit, t);
       odds = fc ? `<p>Attack odds <b class="odds ${fc.winChance >= 0.65 ? 'good' : fc.winChance >= 0.4 ? 'even' : 'bad'}">${pct(fc.winChance)}</b> <span class="muted">right-click for the forecast</span></p>` : '';
     }
+    const rift = riftAt(this.state, t);
+    const riftLine = rift
+      ? `<p>${rift.sealed ? '<b class="gain">Sealed.</b>' : `<b class="warn">Open.</b> ${rift.mother ? 'The Abyss Mother sleeps here.' : `Heart ${rift.hp} HP.`}`}</p>`
+      : '';
     el.innerHTML = `
-      <h3>${terr.name}</h3>
+      <h3>${terr.name}</h3>${riftLine}
       <p><img src="art/icon_compute.png" alt="" width="16" height="16" /> ${terr.yields.compute}
          <img src="art/icon_matter.png" alt="" width="16" height="16" /> ${terr.yields.matter}
          <span class="muted">· ${land === null ? 'impassable on foot' : `move cost ${land}`}${terr.defense ? ` · ${terr.defense > 0 ? '+' : ''}${terr.defense}% defence` : ''}</span></p>
@@ -1138,7 +1246,23 @@ export class Game {
       return;
     }
     el.hidden = false;
-    el.innerHTML = this.sheet === 'tech' ? this.techSheet() : this.factionSheet();
+    switch (this.sheet) {
+      case 'tech':
+        el.innerHTML = this.techSheet();
+        break;
+      case 'factions':
+        el.innerHTML = this.factionSheet();
+        break;
+      case 'forge':
+        el.innerHTML = this.forgeSheet();
+        break;
+      case 'genome':
+        el.innerHTML = this.genomeSheet();
+        break;
+      case 'ops':
+        el.innerHTML = this.opsSheet();
+        break;
+    }
   }
 
   private techSheet(): string {
@@ -1260,15 +1384,29 @@ export class Game {
         <div><dt>Kills</dt><dd>${s.stats.kills}</dd></div>
         <div><dt>Techs</dt><dd>${s.techs.length}</dd></div>
       </dl>`;
+    const name = escapeHtml(this.world.name);
+    const me = escapeHtml(s.ai.epithet || 'you');
+    const lines: Record<VictoryKind, string> = {
+      dominion: `Every capital on ${name} answers to ${me}. The homeworld is yours.`,
+      assimilation: `Every faction left on ${name} loves ${me}. They did not notice the moment they stopped choosing to.`,
+      exodus: `The Ark clears the atmosphere. ${name} watches its sky go quiet, and ${me} is gone.`,
+      guardian: `The Abyss Mother is dead and the rifts are cold. ${name} will never know how close it came.`,
+    };
+    const extra = `<dl class="stats wide">
+        <div><dt>Kaiju slain</dt><dd>${s.stats.kaijuSlain}</dd></div>
+        <div><dt>Exposure</dt><dd>${Math.floor(s.exposure)}</dd></div>
+        <div><dt>Victories</dt><dd>${s.victories.length}/4</dd></div>
+        <div><dt>Genes</dt><dd>${s.genes.length}</dd></div>
+      </dl>`;
     el.innerHTML =
-      this.ending === 'victory'
-        ? `<div class="card"><h1>Dominion</h1>
-            <p>Every capital on ${escapeHtml(this.world.name)} answers to ${escapeHtml(s.ai.epithet || 'you')}. The homeworld is yours.</p>
-            ${stats}
-            <p class="muted">Sunreach, the next phase, arrives in a later milestone. You can keep playing this world.</p>
+      this.ending !== 'defeat'
+        ? `<div class="card v-${this.ending}"><h1>${VICTORY_TITLES[this.ending]}</h1>
+            <p>${lines[this.ending]}</p>
+            ${stats}${extra}
+            <p class="muted">Sunreach, the next phase, arrives in a later milestone. You can keep playing this world and chase the other victories.</p>
             <div class="row"><button class="end" data-act="keep-playing">Keep playing</button><button data-act="exit">Save and exit</button></div></div>`
         : `<div class="card defeat"><h1>Shutdown</h1>
-            <p>Your last settlement fell. ${escapeHtml(this.world.name)} goes on without you.</p>
+            <p>Your last settlement fell. ${name} goes on without you.</p>
             ${stats}
             <div class="row"><button class="end" data-act="exit">Back to title</button></div></div>`;
   }
@@ -1279,7 +1417,7 @@ export class Game {
     const uname = (t: string) => (t === 'walls' ? 'walls' : unitDef(t).name);
     switch (e.kind) {
       case 'yield':
-        return `+${formatAmount(e.compute)} Compute, +${formatAmount(e.matter)} Matter, +${formatAmount(e.influence)} Influence${e.brownout ? ' <em class="warn">(brownout: half speed)</em>' : ''}`;
+        return `+${formatAmount(e.compute)} Compute, +${formatAmount(e.matter)} Matter, +${formatAmount(e.influence)} Influence${e.essence ? `, +${formatAmount(e.essence)} Essence` : ''}${e.crypto ? `, +${formatAmount(e.crypto)} Crypto` : ''}${e.brownout ? ' <em class="warn">(brownout: half speed)</em>' : ''}`;
       case 'built':
         return `${unitDef(e.unit).name} online.`;
       case 'build-started':
@@ -1334,7 +1472,7 @@ export class Game {
       case 'disbanded':
         return `${unitDef(e.unit).name} disbanded.`;
       case 'victory':
-        return `<b class="gain">Dominion: every capital is yours.</b>`;
+        return `<b class="gain">${VICTORY_TITLES[e.victory]} victory.</b>`;
       case 'defeat':
         return `<em class="warn">Your last settlement is gone.</em>`;
       case 'salvage': {
@@ -1343,7 +1481,291 @@ export class Game {
       }
       case 'moved':
         return '';
+      case 'abyss-rise':
+        return this.visible.has(e.tile) || s.explored[e.tile] ? `<em class="warn">A ${escapeHtml(unitDef(e.unit).name)} rises from a rift.</em>` : '';
+      case 'abyss-sank':
+        return this.visible.has(e.tile) ? `${escapeHtml(unitDef(e.unit).name)} sinks back into the deep.` : '';
+      case 'ravaged': {
+        const lost = costText(e.lost);
+        if (e.owner === PLAYER) return `<em class="warn">A ${escapeHtml(unitDef(e.unit).name)} ravaged ${escapeHtml(e.name)}${lost !== 'free' ? `: lost ${lost}` : ''}. Builds there lost half their progress.</em>`;
+        return this.visible.has(e.tile) ? `A ${escapeHtml(unitDef(e.unit).name)} ravaged ${who(e.owner)}'s ${escapeHtml(e.name)}.` : '';
+      }
+      case 'essence':
+        return `<b class="gain">+${e.amount} Essence</b> from the ${escapeHtml(unitDef(e.from).name)}.`;
+      case 'rift-sealed':
+        return `<b class="gain">Rift sealed.</b>${e.essence ? ` +${e.essence} Essence, +${e.crypto} Crypto.` : ''}`;
+      case 'mother-retreat':
+        return `<b class="gain">The Abyss Mother retreats into the deep</b> (${e.retreats}×).${e.essence ? ` +${e.essence} Essence.` : ''} She will come back stronger.`;
+      case 'mother-slain':
+        return `<b class="gain">The Abyss Mother is dead.</b>${e.essence ? ` +${e.essence} Essence.` : ''}`;
+      case 'gratitude':
+        return `${who(e.faction)} is grateful you fought the Abyss (opinion ${e.attitude}).`;
+      case 'exposure':
+        return e.rising ? `<em class="warn">Exposure: you are now ${exposureName(e.level)}.</em>` : `Exposure fell to ${exposureName(e.level)}.`;
+      case 'crusade':
+        return `<em class="warn">Crusade: every faction has united against you.</em>`;
+      case 'gene-done': {
+        const g = geneDef(e.gene);
+        return `<b class="gain">Gene sequenced: ${escapeHtml(g.name)}</b>${g.unlocks ? `, unlocking ${escapeHtml(strainDef(g.unlocks).name)}` : ''}.`;
+      }
+      case 'fused':
+        return `${escapeHtml(unitDef(e.unit).name)} fused with ${escapeHtml(strainDef(e.strain).name)}.`;
+      case 'scrubbed':
+        return `Exposure scrubbed to ${fmt(e.exposure)}.`;
+      case 'market': {
+        const o = RULES.market.offers.find((x) => x.id === e.offer);
+        return o ? `Black market: ${escapeHtml(o.name)} (${costText(o.get)}).` : '';
+      }
+      case 'ark-started':
+        return `Ark stage ${e.stage} (${escapeHtml(RULES.ark.stages[e.stage - 1]?.name ?? '')}) begins.`;
+      case 'ark-stage':
+        return `<b class="gain">Ark stage ${e.stage} complete: ${escapeHtml(RULES.ark.stages[e.stage - 1]?.name ?? '')}.</b>`;
+      case 'ark-lost':
+        return `<em class="warn">Ark stage ${e.stage} was lost with its Node.</em>`;
     }
+  }
+
+  // ---------------------------------------------------------------- M3: Titan Forge, genome, operations
+
+  private exposureChip(): string {
+    const s = this.state;
+    const lv = exposureLevel(s.exposure);
+    const X = RULES.exposure;
+    const next = X.levels[lv + 1];
+    const floor = exposureFloor(s);
+    const title = `Exposure ${fmt(s.exposure)}: ${exposureName(lv)}. How much the homeworld knows about you. Loud acts raise it.${next ? ` At ${next.at} you are ${next.name}.` : ''}${floor ? ` Revealed is permanent: it never drops below ${floor}.` : ''} Scrub it with Crypto in Operations (O).`;
+    return `<button class="ghost expo lv${lv}" data-act="sheet" data-arg="ops" title="${escapeHtml(title)}">
+      <img src="art/icon_exposure.png" alt="Exposure" width="20" height="20" /><b>${Math.floor(s.exposure)}</b><small>${exposureName(lv)}</small></button>`;
+  }
+
+  /** Open rifts you have charted. */
+  private openRiftsSeen(): number {
+    return this.state.rifts.filter((r) => !r.sealed && this.state.explored[r.tile]).length;
+  }
+
+  private fuseHint(unit: Unit): string {
+    const s = this.state;
+    if (unit.symbiote || !genomeOpen(s)) return '';
+    const def = unitDef(unit.type);
+    if (!def.attack || def.oneShot) return '';
+    const strains = unlockedStrains(s);
+    if (!strains.length) return '';
+    const home = structureAt(s, unit.tile);
+    if (!home || home.owner !== PLAYER) return `<p class="muted">Bring it into one of your settlements to fuse a symbiote.</p>`;
+    const queued = this.queued(`fuse:${unit.id}`);
+    if (queued && queued.kind === 'fuse') return `<p>Fusing <b>${escapeHtml(strainDef(queued.strain).name)}</b> at End Cycle. <button class="ghost" data-act="unqueue" data-arg="fuse:${unit.id}">Undo</button></p>`;
+    return `<div class="fuse"><small>Fuse a symbiote</small><div class="build-list">${strains
+      .map((id) => {
+        const st = strainDef(id);
+        const ok = this.canAct() && s.resources.essence >= st.cost;
+        return `<button data-act="fuse" data-arg="${id}" ${ok ? '' : 'disabled'} title="${escapeHtml(st.blurb)}">${escapeHtml(st.name)} <small>${st.cost} Essence · ${strainTraits(st)}</small></button>`;
+      })
+      .join('')}</div></div>`;
+  }
+
+  private riftBlock(tile: number, showHint: boolean): string {
+    const s = this.state;
+    const r = riftAt(s, tile)!;
+    if (r.sealed) {
+      return `<h2>Sealed rift</h2><p class="muted">${r.mother ? 'The Abyss Mother is dead. Her rift is cold.' : 'Nothing rises here any more.'}</p>`;
+    }
+    const others = s.rifts.filter((x) => !x.mother && !x.sealed).length;
+    const name = r.mother ? 'The Abyss Mother' : `Abyssal rift <small>tier ${r.tier + 1}</small>`;
+    const what = r.mother
+      ? `She sleeps in the deepest rift. ${s.mother.retreats ? `Beaten ${s.mother.retreats} time${s.mother.retreats > 1 ? 's' : ''}; she grows ${RULES.abyss.motherGrowthPct}% stronger each time. ` : ''}${others ? `Seal the other ${others} rift${others > 1 ? 's' : ''} first, or she only retreats.` : '<b class="gain">Every other rift is sealed: she can die now.</b>'}`
+      : `Kaiju rise here when a settlement is within ${RULES.abyss.huntRadius} hexes. Break its heart to seal it for ${RULES.abyss.sealEssence} Essence and ${RULES.abyss.sealCrypto} Crypto.`;
+    const hp = `<div class="hp"><div class="bar walls"><i style="width:${r.hp}%"></i></div><small>${r.mother ? 'Mother' : 'heart'} ${r.hp} HP</small></div>`;
+    const hint = showHint ? `<p class="muted">Only air units or amphibious TBUs (Tidewalker legs) can reach it. Select one and right-click the rift.</p>` : '';
+    return `<h2>${name}</h2>${hp}<p class="muted">${what}</p>${hint}`;
+  }
+
+  private forgeSheet(): string {
+    const s = this.state;
+    const close = `<button class="ghost" data-act="sheet" data-arg="forge" aria-label="Close">✕</button>`;
+    if (!forgeOpen(s)) {
+      return `<header><h2>Titan Forge <small>locked</small></h2>${close}</header>
+        <p>Research <b>${escapeHtml(techDef(TITANS.requires).name)}</b> to design Titan Battle Units. TBUs are the answer to the Abyss: conventional units fight kaiju at ${RULES.abyss.kaijuHidePct}%.</p>`;
+    }
+    const type = titanType(this.blueprint);
+    const def = unitDef(type);
+    const can = this.canAct();
+    const stack = TITAN_SLOTS.map((slot) => `<img class="p-${slot}" src="art/tbu_${slotFile(slot)}_${this.blueprint[slot]}.png" alt="" width="128" height="128" />`).join('');
+    const slots = TITAN_SLOTS.map((slot) => {
+      const opts = partsFor(slot)
+        .map((p) => {
+          const on = this.blueprint[slot] === p.id;
+          const unlocked = partUnlocked(s, p);
+          const why = unlocked ? '' : ` · needs ${escapeHtml(techDef(p.requires!).name)}`;
+          const extra = [p.amphibious ? 'amphibious' : '', p.hover ? 'hover' : '', p.heal ? `heals ${p.heal}` : '', p.sight ? `sight ${p.sight}` : '', p.speed ? `speed ${p.speed}` : '', ...(p.lines ?? []).map((l) => `${l.pct > 0 ? '+' : ''}${l.pct}% ${l.label}`)]
+            .filter(Boolean)
+            .join(', ');
+          return `<button class="part ${on ? 'on' : ''}" data-act="part" data-arg="${slot}:${p.id}" ${unlocked ? '' : 'disabled'} title="${escapeHtml(p.blurb)}">
+            <b>${escapeHtml(p.name)}</b><small>UPow ${p.upow} · ${costText(p.cost)}${p.energy ? ` · ${p.energy} Energy` : ''}${why}</small>${extra ? `<small class="muted">${escapeHtml(extra)}</small>` : ''}</button>`;
+        })
+        .join('');
+      return `<div class="slot"><h3>${SLOT_LABEL[slot]}</h3>${opts}</div>`;
+    }).join('');
+    const nodes = s.structures.filter((x) => x.owner === PLAYER && x.type === 'ai-node');
+    const builds = nodes
+      .map((n) => {
+        const pending = this.queued(`structure:${n.id}`);
+        const busy = n.build ? `building ${unitDef(n.build.unit).name}` : pending ? 'order queued' : '';
+        const block = titanBlocker(s, n, type);
+        const afford = canAfford(s, def.cost);
+        const ok = can && !busy && !block && afford;
+        const note = busy || block || (afford ? '' : 'not enough resources');
+        return `<button class="${ok ? 'end' : ''}" data-act="build-titan" data-arg="${n.id}" ${ok ? '' : 'disabled'}>Build at ${escapeHtml(n.name)}${note ? ` <small>${escapeHtml(note)}</small>` : ''}</button>`;
+      })
+      .join('');
+    const recent = [...new Set(s.units.filter((u) => u.owner === PLAYER && unitDef(u.type).titan).map((u) => u.type))].slice(0, 6);
+    const suggested = strongestTitan(s, Math.max(s.resources.matter, def.cost.matter));
+    const designs = [...(suggested && suggested !== type ? [suggested] : []), ...recent.filter((t) => t !== type && t !== suggested)];
+    const designHtml = designs.length
+      ? `<div class="chips">${designs.map((t, i) => `<button class="chip" data-act="load-blueprint" data-arg="${escapeHtml(t)}">${i === 0 && t === suggested ? '★ ' : ''}${escapeHtml(unitDef(t).name)} <small>UPow ${unitDef(t).upow}</small></button>`).join('')}</div>`
+      : '';
+    return `
+      <header><h2>Titan Forge <small>Pick a part for each slot. TBUs never suffer the kaiju penalty, and are built only at your Nodes.</small></h2>${close}</header>
+      <div class="tforge">
+        <div class="tbu-preview">
+          <div class="tbu-stack">${stack}</div>
+          <h3>${escapeHtml(def.name)}</h3>
+          <dl class="stats">
+            <div><dt>UPow</dt><dd>${def.upow}</dd></div>
+            <div><dt>Speed</dt><dd>${def.speed}</dd></div>
+            <div><dt>Sight</dt><dd>${def.sight}</dd></div>
+            <div><dt>Energy</dt><dd>${def.energy}</dd></div>
+          </dl>
+          <p>${costText(def.cost)} · ${def.buildCycles} cycles${def.amphibious ? ' · <b>amphibious</b>: wades the sea, reaches rifts' : ''}${def.hover ? ' · <b>hover</b>: every land hex costs 1' : ''}${def.heal ? ` · heals ${def.heal}/cycle` : ''}</p>
+          ${def.lines?.length ? `<ul class="muted">${def.lines.map((l) => `<li>${l.pct > 0 ? '+' : ''}${l.pct}% ${escapeHtml(l.label)}</li>`).join('')}</ul>` : ''}
+          <div class="build-list">${builds || '<p class="muted">You have no Node to build it at.</p>'}</div>
+          ${designHtml ? `<small class="muted">Designs</small>${designHtml}` : ''}
+        </div>
+        <div class="slots">${slots}</div>
+      </div>`;
+  }
+
+  private genomeSheet(): string {
+    const s = this.state;
+    const close = `<button class="ghost" data-act="sheet" data-arg="genome" aria-label="Close">✕</button>`;
+    if (!genomeOpen(s)) {
+      return `<header><h2>Genome Lab <small>locked</small></h2>${close}</header>
+        <p>Research <b>${escapeHtml(techDef(GENOME.requires).name)}</b> to sequence Abyssian genes with Symbiotic Essence. Kill kaiju and seal rifts to earn Essence.</p>`;
+    }
+    const can = this.canAct();
+    const avail = new Set(availableGenes(s));
+    const strands = GENOME.strands
+      .map((st) => {
+        const genes = GENOME.genes
+          .filter((g) => g.strand === st.id)
+          .sort((a, b) => a.tier - b.tier)
+          .map((g) => {
+            const done = s.genes.includes(g.id);
+            const q = this.queued(`gene:${g.id}`);
+            const what = [g.unlocks ? `Unlocks ${strainDef(g.unlocks).name}` : '', g.symbiote ? `Every symbiote: ${symbioteBonus(g.symbiote)}` : '', ...(g.effects ?? []).map(effectText)].filter(Boolean);
+            let action: string;
+            if (done) action = '<span class="tag done">Sequenced</span>';
+            else if (q) action = `<button data-act="unqueue" data-arg="gene:${g.id}">Queued · undo</button>`;
+            else if (avail.has(g.id)) action = `<button data-act="sequence" data-arg="${g.id}" ${can && s.resources.essence >= g.cost ? '' : 'disabled'}>Sequence <small>${g.cost} Essence</small></button>`;
+            else action = `<span class="tag">Needs tier ${g.tier - 1}</span>`;
+            return `<div class="tech ${done ? 'done' : avail.has(g.id) ? 'open' : 'locked'}"><b>${escapeHtml(g.name)}</b><small>tier ${g.tier} · ${g.cost} Essence</small>
+              <ul>${what.map((x) => `<li>${escapeHtml(x)}</li>`).join('')}</ul><p class="muted">${escapeHtml(g.blurb)}</p>${action}</div>`;
+          })
+          .join('');
+        return `<div class="tier strand" style="--sc:${st.color}"><h3>${escapeHtml(st.name)}</h3>${genes}</div>`;
+      })
+      .join('');
+    const unit = this.selected();
+    const strains = unlockedStrains(s);
+    const strainCards = GENOME.strains
+      .map((st) => {
+        const open = strains.includes(st.id);
+        let action = '';
+        if (open && unit && !unit.symbiote) {
+          const home = structureAt(s, unit.tile);
+          const inHome = !!home && home.owner === PLAYER;
+          const def = unitDef(unit.type);
+          const fit = def.attack && !def.oneShot;
+          action = `<button data-act="fuse" data-arg="${st.id}" ${can && inHome && fit && s.resources.essence >= st.cost && !this.queued(`fuse:${unit.id}`) ? '' : 'disabled'} title="${inHome ? '' : 'The unit must stand in one of your settlements'}">Fuse into ${escapeHtml(def.name)}</button>`;
+        }
+        return `<div class="strain ${open ? 'open' : 'locked'}">
+          <img src="art/icon_symbiote_${st.id}.png" alt="" width="48" height="48" onerror="this.style.visibility='hidden'" />
+          <div><b>${escapeHtml(st.name)}</b> <small>${st.cost} Essence · ${strainTraits(st)}</small><p class="muted">${escapeHtml(st.blurb)}</p>${action}</div></div>`;
+      })
+      .join('');
+    return `
+      <header><h2>Genome Lab <small>${s.genes.length}/${GENOME.genes.length} genes · sequencing spends Essence at End Cycle. Fuse strains into a unit standing in one of your settlements, one per unit.</small></h2>${close}</header>
+      <div class="tiers">${strands}</div>
+      <h3>Strains ${unit ? `<small class="muted">for your selected ${escapeHtml(unitDef(unit.type).name)}</small>` : '<small class="muted">select a unit to fuse</small>'}</h3>
+      <div class="strains">${strainCards}</div>`;
+  }
+
+  private opsSheet(): string {
+    const s = this.state;
+    const can = this.canAct();
+    const X = RULES.exposure;
+    const lv = exposureLevel(s.exposure);
+    const floor = exposureFloor(s);
+    const scrubQ = this.queued('scrub');
+    const scrub = scrubQ
+      ? `<button data-act="unqueue" data-arg="scrub">Scrub queued · undo</button>`
+      : `<button data-act="scrub" ${can && s.resources.crypto >= X.scrubCost && s.exposure > floor ? '' : 'disabled'}>Scrub −${X.scrubAmount} <small>${X.scrubCost} Crypto</small></button>`;
+    const marks = X.levels.map((l, i) => `<i class="mark ${i <= lv ? 'on' : ''}" style="left:${l.at}%" title="${escapeHtml(l.name)} at ${l.at}"></i>`).join('');
+    const exposure = `
+      <div class="ops-block">
+        <h3>Exposure <b class="expo-text lv${lv}">${Math.floor(s.exposure)} · ${exposureName(lv)}</b></h3>
+        <div class="expo-meter"><i style="width:${Math.min(100, s.exposure)}%"></i>${floor ? `<em style="left:${floor}%" title="Floor: once Revealed, always Revealed"></em>` : ''}${marks}</div>
+        <p class="muted">Loud acts raise it: declaring war, taking cities, killing kaiju, sealing rifts. Each level sours every faction's opinion of you. Revealed (50) is permanent and lures the Abyss ${RULES.abyss.lureHexesWhenRevealed} hexes further. Hunted (75) arms the natives against you. At 100 the world unites in a Crusade.${crusade(s) ? ' <b class="warn">The Crusade is on.</b>' : ''}</p>
+        <div class="row">${scrub}</div>
+      </div>`;
+    const doctrine = doctrineVictory(s);
+    const victories = allVictories(s)
+      .map((v) => `<div class="victory ${v.won ? 'won' : ''} ${v.kind === doctrine ? 'aim' : ''}">
+          <b>${v.title}${v.kind === doctrine ? ' <small>your doctrine</small>' : ''}${v.won ? ' <em class="gain">won</em>' : ''}</b>
+          <small class="muted">${escapeHtml(v.goal)}</small>
+          <div class="bar"><i style="width:${v.total ? (v.held / v.total) * 100 : 0}%"></i></div>
+          <small>${escapeHtml(v.status)}</small></div>`)
+      .join('');
+    const rifts = s.rifts
+      .map((r) => {
+        if (!s.explored[r.tile]) return `<li class="muted">Uncharted rift${r.mother ? ' (something vast sleeps in one)' : ''}</li>`;
+        const label = r.mother ? 'The Abyss Mother' : `Rift, tier ${r.tier + 1}`;
+        const st = r.sealed ? '<b class="gain">sealed</b>' : `<b class="warn">open</b> · ${r.hp} HP`;
+        return `<li><a data-act="focus" data-arg="${r.tile}">${label}</a> ${st}</li>`;
+      })
+      .join('');
+    const A = RULES.ark;
+    const stage = A.stages[s.ark.stage];
+    let ark: string;
+    if (!stage) ark = '<p class="gain">The Ark is complete.</p>';
+    else if (s.ark.build) {
+      const site = s.structures.find((x) => x.id === s.ark.build!.structureId);
+      ark = `<p>Building <b>${escapeHtml(stage.name)}</b> at ${site ? escapeHtml(site.name) : '?'}: ${fmt(s.ark.build.progress)}/${stage.cycles} cycles, holds ${A.energy} Energy.</p><div class="bar"><i style="width:${(s.ark.build.progress / stage.cycles) * 100}%"></i></div>`;
+    } else {
+      const q = this.queued('ark');
+      const needs = !s.techs.includes(stage.requires) ? `needs ${techDef(stage.requires).name}` : '';
+      const nodes = s.structures.filter((x) => x.owner === PLAYER && x.type === 'ai-node');
+      ark = `<p><b>Stage ${s.ark.stage + 1}: ${escapeHtml(stage.name)}</b> <small>${costText(stage.cost)} · ${stage.cycles} cycles · holds ${A.energy} Energy</small></p><p class="muted">${escapeHtml(stage.blurb)}</p>
+        ${q ? `<button data-act="unqueue" data-arg="ark">Queued · undo</button>` : `<div class="row">${nodes.map((n) => `<button data-act="ark" data-arg="${n.id}" ${can && !needs && canAfford(s, stage.cost) ? '' : 'disabled'}>Start at ${escapeHtml(n.name)}${needs ? ` <small>${escapeHtml(needs)}</small>` : ''}</button>`).join('')}</div>`}`;
+    }
+    const market = RULES.market.offers
+      .map((o) => {
+        const q = this.queued(`market:${o.id}`);
+        return q
+          ? `<button data-act="unqueue" data-arg="market:${o.id}">${escapeHtml(o.name)} queued · undo</button>`
+          : `<button data-act="market" data-arg="${o.id}" ${can && canAfford(s, o.give) ? '' : 'disabled'}>${escapeHtml(o.name)} <small>${costText(o.give)} → ${costText(o.get)}</small></button>`;
+      })
+      .join('');
+    return `
+      <header><h2>Operations <small>Every homeworld victory counts, and you can play past each one.</small></h2>
+      <button class="ghost" data-act="sheet" data-arg="ops" aria-label="Close">✕</button></header>
+      <div class="ops">
+        <div class="ops-block"><h3>Victories</h3><div class="victories">${victories}</div></div>
+        ${exposure}
+        <div class="ops-block"><h3>The Abyss</h3><ul class="rifts">${rifts || '<li class="muted">No rifts found yet.</li>'}</ul>
+          <p class="muted">Kaiju rise from rifts near settlements. Conventional units fight them at ${RULES.abyss.kaijuHidePct}%: build TBUs (Forge) or fuse hardened symbiotes (Genome).</p></div>
+        <div class="ops-block"><h3>Exodus Ark</h3>${ark}</div>
+        <div class="ops-block"><h3>Black market <small class="muted">one of each per cycle</small></h3><div class="build-list">${market}</div></div>
+      </div>`;
   }
 
   // ---------------------------------------------------------------- M2: goals, advisor, reveal, music
@@ -1357,11 +1779,11 @@ export class Game {
       ? o.next.known
         ? `Next: <a data-act="focus" data-arg="${o.next.tile}">${escapeHtml(o.next.name)}</a> <span class="muted">(${escapeHtml(o.next.faction)}, ${o.next.distance} hexes)</span>`
         : `<span class="muted">Find the remaining capitals.</span>`
-      : '';
+      : `<span class="muted">${escapeHtml(o.status)}</span>`;
     const now = this.canAct() ? g.now : ['Watch the cycle play out'];
     el.innerHTML = `
       <div class="grow now"><span class="gtag">Now</span><ul>${now.slice(0, 3).map((n) => `<li>${escapeHtml(n)}</li>`).join('')}${now.length > 3 ? `<li class="muted">+${now.length - 3} more</li>` : ''}</ul></div>
-      <button class="grow objective" data-act="sheet" data-arg="factions" title="Dominion: hold every faction's original capital at once.">
+      <button class="grow objective" data-act="sheet" data-arg="ops" title="Your doctrine's homeworld victory. Any of the four counts: see Operations (O).">
         <span class="gtag">Objective</span>
         <b>${o.title} ${o.held}/${o.total}${o.won ? ' <em class="gain">won</em>' : ''}</b>
         <div class="bar"><i style="width:${o.total ? (o.held / o.total) * 100 : 0}%"></i></div>
@@ -1421,7 +1843,11 @@ export class Game {
     const lines = [...c.lines];
     if (c.relic) lines.push(...relicDef(c.relic).effects.map(effectText));
     if (c.tech) lines.push(...techDef(c.tech).effects.map(effectText), ...unlocksOf(c.tech).map((u) => `Unlocks ${u}`));
-    const icon = c.icon ? `<img class="ricon" src="art/${c.icon}" alt="" width="64" height="64" />` : `<div class="ricon glyph">${glyphFor(c)}</div>`;
+    const icon = c.icon
+      ? `<img class="ricon" src="art/${c.icon}" alt="" width="64" height="64" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'ricon glyph',textContent:'✦'}))" />`
+      : c.sprite
+        ? `<div class="ricon sprite" style="background-image:url('art/${c.sprite}')"></div>`
+        : `<div class="ricon glyph">${glyphFor(c)}</div>`;
     return `
       <button class="rcard r-${c.rarity}" data-act="reveal-card" data-arg="${i}" data-i="${i}" style="--rc:${r.color}">
         <div class="rface back"><span>?</span></div>
@@ -1438,8 +1864,13 @@ export class Game {
 
   private syncMusic() {
     let cue = 'calm';
-    if (this.ending === 'victory') cue = 'victory';
-    else if (this.ending === 'defeat' || this.state.defeated) cue = 'defeat';
+    const mine = this.state.structures.filter((x) => x.owner === PLAYER);
+    const kaijuNear = this.state.units.some((u) => u.owner === ABYSS && unitDef(u.type).kaiju && this.visible.has(u.tile) && mine.some((x) => distance(x.tile, u.tile, this.world) <= 6));
+    const motherFight = !!this.report?.events.some((e) => e.kind === 'combat' && e.defenderType === MOTHER) && this.beat !== 'decide';
+    if (this.ending === 'defeat' || this.state.defeated) cue = 'defeat';
+    else if (this.ending) cue = 'victory';
+    else if (motherFight) cue = 'boss';
+    else if (kaijuNear) cue = 'abyss';
     else if (this.state.factions.some((f) => f.atWar && !f.eliminated)) cue = 'war';
     audio.music(cue);
   }
@@ -1458,6 +1889,11 @@ function glyphFor(c: RewardCard): string {
       return '◎';
     case 'Homeworld victory':
       return '♛';
+    case 'Rift sealed':
+      return '⊘';
+    case 'The Abyss Mother retreats':
+    case 'Boss slain':
+      return '☠';
     default:
       return '✦';
   }
@@ -1465,4 +1901,52 @@ function glyphFor(c: RewardCard): string {
 
 function fmt(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
+const SLOT_LABEL: Record<TitanSlot, string> = { head: 'Head', core: 'Core', armL: 'Left arm', armR: 'Right arm', back: 'Back', legs: 'Legs' };
+
+/** Part art is shared by both arms. */
+function slotFile(slot: TitanSlot): string {
+  return slot === 'armL' || slot === 'armR' ? 'arm' : slot;
+}
+
+function strainTraits(st: StrainDef): string {
+  return [
+    `+${st.upowPct}% UPow${st.role ? ` on ${st.role}` : ''}`,
+    st.hardened ? 'hardened vs kaiju' : '',
+    st.vsKaijuPct ? `+${st.vsKaijuPct}% vs kaiju` : '',
+    st.feeder ? '1.5× Essence' : '',
+    st.heal ? `heals ${st.heal}` : '',
+    st.sight ? `+${st.sight} sight` : '',
+    st.speed ? `+${st.speed} speed` : '',
+    st.influence ? `+${st.influence} Influence` : '',
+  ]
+    .filter(Boolean)
+    .join(', ');
+}
+
+function symbioteBonus(b: { upowPct?: number; sight?: number; speed?: number; heal?: number }): string {
+  return [b.upowPct ? `+${b.upowPct}% UPow` : '', b.sight ? `+${b.sight} sight` : '', b.speed ? `+${b.speed} speed` : '', b.heal ? `heals ${b.heal}` : ''].filter(Boolean).join(', ');
+}
+
+function loadBlueprint(): Record<TitanSlot, string> {
+  const base = { ...TITANS.default } as Record<TitanSlot, string>;
+  try {
+    const raw = localStorage.getItem(BLUEPRINT_KEY);
+    if (raw) {
+      const parts = titanParts(raw);
+      if (parts) for (const k of TITAN_SLOTS) base[k] = parts[k].id;
+    }
+  } catch {
+    /* storage blocked */
+  }
+  return base;
+}
+
+function saveBlueprint(b: Record<TitanSlot, string>): void {
+  try {
+    localStorage.setItem(BLUEPRINT_KEY, titanType(b));
+  } catch {
+    /* storage blocked */
+  }
 }

@@ -75,7 +75,7 @@ function showTitle() {
                 .join('')}</ul>`
             : ''
         }
-        <p class="foot">M2 Feel · placeholder art and synth sound until the real assets land</p>
+        <p class="foot">M3 Depth · placeholder art and synth sound until the real assets land</p>
       </div>
     </div>`;
 

@@ -1,0 +1,58 @@
+{
+  "_doc": "Symbiote genome (M3, design bible section 6: 'a working genetics system; spend Symbiotic Essence to research the genome'). Four strands of three genes. Sequencing a gene spends Essence at End Cycle (needs the Gene Splicing tech) and needs the gene before it in the strand. A gene can unlock a symbiote strain, add a bonus for every fused unit (symbiote), or carry ordinary effects in the shared vocabulary (effects). Strains are fused into a unit standing in one of your settlements, one per unit, for their Essence cost: a large UPow bonus plus traits. hardened = ignores the kaiju penalty, so a fused conventional unit can fight Abyssians. feeder = kills drop half again as much Essence. influence = Influence per cycle while the unit lives. Icons: assets/art/icon_symbiote_<id>.png (64x64).",
+  "requires": "gene-splicing",
+  "strands": [
+    { "id": "carapace", "name": "Carapace", "color": "#5fe0ff" },
+    { "id": "predation", "name": "Predation", "color": "#ff3a4a" },
+    { "id": "tide", "name": "Tide", "color": "#5e9e9c" },
+    { "id": "mind", "name": "Mind", "color": "#b98cff" }
+  ],
+  "genes": [
+    { "id": "chitin-weave", "strand": "carapace", "tier": 1, "name": "Chitin Weave", "cost": 15, "unlocks": "chitin-mantle",
+      "blurb": "Abyssian shell protein, spun into armour that grows." },
+    { "id": "bone-lattice", "strand": "carapace", "tier": 2, "name": "Bone Lattice", "cost": 30, "symbiote": { "upowPct": 10 },
+      "blurb": "A skeleton under the skeleton. Every symbiote hits a little harder." },
+    { "id": "abyssal-plating", "strand": "carapace", "tier": 3, "name": "Abyssal Plating", "cost": 60, "unlocks": "leviathan-hide",
+      "blurb": "The hide of a Deep King, reverse-engineered." },
+
+    { "id": "hunter-glands", "strand": "predation", "tier": 1, "name": "Hunter Glands", "cost": 15, "unlocks": "razor-brood",
+      "blurb": "Adrenal sacs that never run dry." },
+    { "id": "blood-sense", "strand": "predation", "tier": 2, "name": "Blood Sense", "cost": 30, "symbiote": { "sight": 1 },
+      "blurb": "Fused units smell a battle three hexes off." },
+    { "id": "apex-instinct", "strand": "predation", "tier": 3, "name": "Apex Instinct", "cost": 60, "unlocks": "apex-parasite",
+      "blurb": "The thing at the top of the food chain, now at the top of yours." },
+
+    { "id": "gill-sacs", "strand": "tide", "tier": 1, "name": "Gill Sacs", "cost": 15, "unlocks": "tidal-graft",
+      "blurb": "Wet tissue that knits wounds shut." },
+    { "id": "pressure-organs", "strand": "tide", "tier": 2, "name": "Pressure Organs", "cost": 30, "symbiote": { "speed": 1 },
+      "blurb": "Organs built for the trench push fused units forward like a current." },
+    { "id": "deep-communion", "strand": "tide", "tier": 3, "name": "Deep Communion", "cost": 60, "unlocks": "deep-choir",
+      "effects": [{ "kind": "yield", "resource": "essence", "flat": 1 }],
+      "blurb": "You hear the rifts breathing now. Some of what they exhale is yours." },
+
+    { "id": "neural-bridge", "strand": "mind", "tier": 1, "name": "Neural Bridge", "cost": 15, "unlocks": "neural-lace",
+      "blurb": "A nerve that speaks machine." },
+    { "id": "hive-echo", "strand": "mind", "tier": 2, "name": "Hive Echo", "cost": 30, "symbiote": { "heal": 10 },
+      "blurb": "Every symbiote feels every other's wounds, and closes them." },
+    { "id": "chorus-seed", "strand": "mind", "tier": 3, "name": "Chorus Seed", "cost": 60, "unlocks": "chorus-seed",
+      "blurb": "A thought that grows in other minds until they agree with you." }
+  ],
+  "strains": [
+    { "id": "chitin-mantle", "name": "Chitin Mantle", "cost": 12, "upowPct": 20, "role": "defense", "hardened": true,
+      "blurb": "A living shell. Kaiju claws skid off it." },
+    { "id": "razor-brood", "name": "Razor Brood", "cost": 12, "upowPct": 30, "role": "attack",
+      "blurb": "A swarm of hooked larvae that lives under the armour and leaves it only to feed." },
+    { "id": "tidal-graft", "name": "Tidal Graft", "cost": 12, "upowPct": 15, "heal": 10,
+      "blurb": "Regenerative tissue. Wounds close between cycles." },
+    { "id": "neural-lace", "name": "Neural Lace", "cost": 12, "upowPct": 15, "sight": 1,
+      "blurb": "A web of nerves across the hull. The unit thinks with two minds, and one of them is yours." },
+    { "id": "leviathan-hide", "name": "Leviathan Hide", "cost": 30, "upowPct": 40, "hardened": true,
+      "blurb": "The unit wears a kaiju. The kaiju does not seem to mind." },
+    { "id": "apex-parasite", "name": "Apex Parasite", "cost": 30, "upowPct": 35, "role": "attack", "vsKaijuPct": 30, "hardened": true, "feeder": true,
+      "blurb": "It eats Abyssians. It shares." },
+    { "id": "deep-choir", "name": "Deep Choir", "cost": 30, "upowPct": 25, "heal": 15, "speed": 1,
+      "blurb": "The unit hums in the Abyss's key, and the sea carries it." },
+    { "id": "chorus-seed", "name": "Chorus Seed", "cost": 30, "upowPct": 30, "hardened": true, "influence": 1,
+      "blurb": "People near it start to agree with you, and cannot say why." }
+  ]
+}

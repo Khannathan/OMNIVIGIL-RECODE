@@ -6,10 +6,12 @@ import { archetypeDef, RULES, unitDef } from '../content';
 import { actUnit, blockedTiles, Ctx, declareWar, makePeace, removeUnit, routeToStrike } from './actions';
 import { bestDefender, forecast } from './combat';
 import { mods } from './effects';
+import { crusade, exposureAttitude } from './exposure';
 import { distance, hexesInRange } from './hex';
 import { enterCost, findPath } from './path';
 import { Rng } from './rng';
 import {
+  ABYSS,
   clampAttitude,
   FactionState,
   hostile,
@@ -73,7 +75,9 @@ function think(ctx: Ctx, f: FactionState, u: Unit, rng: Rng): void {
   const cfg = RULES.factions;
   const def = unitDef(u.type);
   const cities = citiesOf(ctx, f);
-  const atWar = f.atWar || f.wars.length > 0;
+  // Kaiju ashore count as a war: everyone takes up arms.
+  const abyssNear = state.units.some((o) => o.owner === ABYSS && distance(o.tile, u.tile, world) <= cfg.huntRadius);
+  const atWar = f.atWar || f.wars.length > 0 || abyssNear;
 
   // Garrison: the first unit on each city stays home unless a fight is next door and winnable.
   const onCity = cities.find((c) => c.tile === u.tile);
@@ -83,7 +87,7 @@ function think(ctx: Ctx, f: FactionState, u: Unit, rng: Rng): void {
     // Strike anything adjacent we can probably beat.
     const adjacent = hexesInRange(u.tile, 1, world).filter((t) => t !== u.tile && enemyAt(ctx, f.id, t));
     for (const t of adjacent.sort((a, b) => a - b)) {
-      const d = bestDefender(state, world, t, f.id);
+      const d = bestDefender(state, world, t, f.id, u);
       const odds = d ? forecast(state, world, u, d).winChance : 1;
       const need = garrison ? cfg.attackOdds + 0.15 : cfg.attackOdds;
       if (!d && !def.capture) continue;
@@ -178,7 +182,8 @@ export function diplomacyPhase(ctx: Ctx, rng: Rng): void {
   const { state, world, events } = ctx;
   const cfg = RULES.diplomacy;
   const terr = territory(state, world);
-  const bonus = mods(state).attitude;
+  const bonus = mods(state).attitude + exposureAttitude(state);
+  const united = crusade(state);
   for (const f of state.factions) {
     if (f.eliminated) continue;
     const base = archetypeDef(f.archetype).baseAttitude + bonus;
@@ -188,8 +193,9 @@ export function diplomacyPhase(ctx: Ctx, rng: Rng): void {
       delta += trespassers * cfg.trespassPerUnit;
     }
     f.attitude = clampAttitude(f.attitude + delta);
-    if (!f.atWar && f.attitude <= cfg.warThreshold) declareWar(state, events, f.id, PLAYER, f.id);
+    if (!f.atWar && (f.attitude <= cfg.warThreshold || united)) declareWar(state, events, f.id, PLAYER, f.id);
   }
+  if (united) return; // the Crusade holds: no wars between them
   const alive = state.factions.filter((f) => !f.eliminated);
   for (let i = 0; i < alive.length; i++) {
     for (let j = i + 1; j < alive.length; j++) {

@@ -3,7 +3,8 @@
 // a prize. `revealsFor` turns a cycle's good news into reward cards for the
 // Reckon reveal (design bible section 17: reward reveals with rarity flashes).
 
-import { RarityId, RARITY_IDS, rarityDef, relicDef, REWARDS, SalvageDef, techDef, unitDef, RESOURCE_NAMES } from '../content';
+import { geneDef, RarityId, RARITY_IDS, rarityDef, relicDef, REWARDS, RULES, SalvageDef, techDef, unitDef, RESOURCE_NAMES } from '../content';
+import { VICTORY_TITLES } from './victory';
 import { Rng } from './rng';
 import { factionById, GameEvent, GameState, PLAYER, spawnUnit, structureAt } from './state';
 import { World } from './worldgen';
@@ -72,6 +73,8 @@ export interface RewardCard {
   blurb?: string;
   /** Art for the card face, if any (UI art file). */
   icon?: string;
+  /** Or the first frame of a unit sprite sheet (4 frames in a row). */
+  sprite?: string;
   tile?: number;
   /** Set when the card is a relic or a tech, so the UI can list its effects. */
   relic?: string;
@@ -131,8 +134,33 @@ export function revealsFor(state: GameState, events: GameEvent[]): RewardCard[] 
         cards.push({ rarity: R.firstContact, kicker: 'First contact', title: fname(e.faction), lines: ['A new voice on the map'] });
         break;
       case 'victory':
-        cards.push({ rarity: R.victory, kicker: 'Homeworld victory', title: 'Dominion', lines: ['Every capital answers to you'] });
+        cards.push({ rarity: R.victory, kicker: 'Homeworld victory', title: VICTORY_TITLES[e.victory], lines: [VICTORY_LINES[e.victory]] });
         break;
+      case 'essence': {
+        const def = unitDef(e.from);
+        if (!def.kaiju) break;
+        cards.push({ rarity: e.amount >= 30 ? 'epic' : 'rare', kicker: 'Kaiju slain', title: def.name, lines: [`+${e.amount} Symbiotic Essence`], sprite: `unit_${def.id}_idle.png`, tile: e.tile });
+        break;
+      }
+      case 'rift-sealed':
+        cards.push({ rarity: R.riftSealed, kicker: 'Rift sealed', title: 'The sea closes', lines: [`+${e.essence} Symbiotic Essence`, `+${e.crypto} Crypto`, 'No more Abyssians from this rift'], tile: e.tile });
+        break;
+      case 'mother-retreat':
+        cards.push({ rarity: R.motherRetreat, kicker: 'The Abyss Mother retreats', title: 'Driven into the deep', lines: [`+${e.essence} Symbiotic Essence`, 'She will return stronger', 'Seal the other rifts to finish her'], tile: e.tile });
+        break;
+      case 'mother-slain':
+        cards.push({ rarity: R.motherSlain, kicker: 'Boss slain', title: 'The Abyss Mother', lines: [`+${e.essence} Symbiotic Essence`, 'Every rift falls silent'], tile: e.tile });
+        break;
+      case 'ark-stage': {
+        const st = RULES.ark.stages[e.stage - 1];
+        cards.push({ rarity: R.arkStage, kicker: `Ark stage ${e.stage} of ${RULES.ark.stages.length}`, title: st?.name ?? 'The Ark', lines: [], blurb: st?.blurb, icon: 'icon_ark.png' });
+        break;
+      }
+      case 'gene-done': {
+        const g = geneDef(e.gene);
+        cards.push({ rarity: g.tier >= 3 ? 'epic' : R.gene, kicker: 'Gene sequenced', title: g.name, lines: g.unlocks ? [`Unlocks a symbiote strain`] : [], blurb: g.blurb, icon: g.unlocks ? `icon_symbiote_${g.unlocks}.png` : undefined });
+        break;
+      }
       default:
         break;
     }
@@ -140,6 +168,13 @@ export function revealsFor(state: GameState, events: GameEvent[]): RewardCard[] 
   // Effects text for relics and techs lives in the UI (describe.ts), which knows how to phrase effects.
   return cards.sort((a, b) => RARITY_IDS.indexOf(a.rarity) - RARITY_IDS.indexOf(b.rarity));
 }
+
+const VICTORY_LINES: Record<string, string> = {
+  dominion: 'Every capital answers to you',
+  assimilation: 'Every surviving faction is Devoted to you',
+  exodus: 'The Ark rises, and you go with it',
+  guardian: 'The rifts are sealed and the Mother is dead',
+};
 
 export function rarityColor(r: RarityId): string {
   return rarityDef(r).color;

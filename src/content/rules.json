@@ -1,9 +1,13 @@
 {
-  "_doc": "Tuning numbers for the M1 rules, kept in one place for balancing. Percentages are whole numbers (25 = +25%).",
-  "start": { "matter": 30, "compute": 30, "influence": 10 },
-  "research": { "energy": 2 },
-  "growth": { "nodeStageComputeEarned": [0, 80, 300], "cityGrowEvery": 18, "cityMaxStage": 3 },
-  "heal": { "base": 10, "inSettlement": 20 },
+  "_doc": "Tuning numbers for the rules, kept in one place for balancing. Percentages are whole numbers (25 = +25%). M3 adds abyss, exposure, crypto, market, ark and victories.",
+  "start": {"matter": 30, "compute": 30, "influence": 10, "essence": 0, "crypto": 5},
+  "research": {"energy": 2},
+  "growth": {
+    "nodeStageComputeEarned": [0, 80, 300],
+    "cityGrowEvery": 18,
+    "cityMaxStage": 3
+  },
+  "heal": {"base": 10, "inSettlement": 20},
   "combat": {
     "baseDamage": 20,
     "minDamage": 6,
@@ -12,8 +16,8 @@
     "embarkedDefensePct": -25,
     "embarkCost": 2
   },
-  "walls": { "node": 8, "city": 4, "perStage": 2, "healPerCycle": 15, "hpAfterCapture": 50 },
-  "influence": { "node": 1, "city": 2 },
+  "walls": {"node": 8, "city": 4, "perStage": 2, "healPerCycle": 15, "hpAfterCapture": 50},
+  "influence": {"node": 1, "city": 2},
   "diplomacy": {
     "swayCost": 20,
     "swayGain": 12,
@@ -47,5 +51,121 @@
     "peaceChance": 0.04,
     "attackOdds": 0.45,
     "huntRadius": 7
+  },
+  "crypto": {"_doc": "Crypto per cycle from each settlement you hold.", "node": 1, "city": 1},
+  "abyss": {
+    "_doc": "Abyssians (design bible sections 9 and 13). From firstRise, every open rift with prey in reach gains pressure each cycle (1, plus 1 per rampEvery cycles); at riseAt it spawns an Abyssian picked by weight from those whose 'from' cycle has come, if fewer than capBase + capPerRift are alive. Abyssians hunt the nearest settlement within huntRadius of their rift, smash its walls, ravage it (city loses a stage; you lose ravageStealPct of your Matter and Compute, and half the progress on that settlement's build and on the Ark), then go back to sink into their rift. kaijuHidePct = UPow change for a non-titan fighting a kaiju. Rift hearts heal heartHealPerCycle and defend with heartUpow[tier]; the Mother grows motherGrowthPct UPow each time she retreats.",
+    "firstRise": 12,
+    "rampEvery": 30,
+    "riseAt": 12,
+    "capBase": 1,
+    "capPerRift": 1,
+    "huntRadius": 12,
+    "lureHexesWhenRevealed": 3,
+    "kaijuHidePct": -60,
+    "tidePerCyclePct": 0.3,
+    "tideCapPct": 40,
+    "ravageStealPct": 20,
+    "heartUpow": [34, 46, 58, 70],
+    "heartHealPerCycle": 10,
+    "sealEssence": 60,
+    "sealCrypto": 20,
+    "motherGrowthPct": 15,
+    "motherSlainEssence": 400,
+    "gratitude": 5,
+    "gratitudeRadius": 5
+  },
+  "exposure": {
+    "_doc": "Exposure: how much the world knows about you (design bible section 6). Levels at 25 Noticed, 50 Revealed (permanent: never drops below 50 again), 75 Hunted, 100 Crusade (every faction declares war on you and they make peace with each other; no faction will make peace with you while it lasts). attitude = shift in where faction opinion drifts, per level. natives = UPow % for faction units fighting you, per level. Gains are in Exposure points; the Exposure effect (Cover Stories, the Inevitable doctrine) scales every gain. scrub = Crypto to wipe scrubAmount, once a cycle.",
+    "levels": [
+      {"at": 0, "name": "Hidden"},
+      {"at": 25, "name": "Noticed"},
+      {"at": 50, "name": "Revealed"},
+      {"at": 75, "name": "Hunted"},
+      {"at": 100, "name": "Crusade"}
+    ],
+    "permanentLevel": 2,
+    "attitude": [0, -5, -15, -25, -40],
+    "natives": [0, 0, 0, 15, 25],
+    "passivePerCycle": 0.15,
+    "perExtraSettlement": 0.05,
+    "declareWar": 6,
+    "attack": 0.5,
+    "cityTaken": 4,
+    "capitalTaken": 6,
+    "techDone": 0.5,
+    "kaijuKill": 1,
+    "riftSealed": 3,
+    "ravagedSeen": 0,
+    "scrubCost": 20,
+    "scrubAmount": 6
+  },
+  "market": {
+    "_doc": "Black market (Crypto). Each offer can be taken once a cycle.",
+    "offers": [
+      {
+        "id": "matter",
+        "name": "Salvage contract",
+        "give": {"crypto": 15},
+        "get": {"matter": 40}
+      },
+      {
+        "id": "compute",
+        "name": "Botnet lease",
+        "give": {"crypto": 15},
+        "get": {"compute": 40}
+      },
+      {
+        "id": "influence",
+        "name": "Bought headlines",
+        "give": {"crypto": 20},
+        "get": {"influence": 15}
+      },
+      {
+        "id": "essence",
+        "name": "Smuggled specimens",
+        "give": {"crypto": 30},
+        "get": {"essence": 10}
+      }
+    ]
+  },
+  "ark": {
+    "_doc": "Exodus: build the Ark in three stages at one of your Nodes, then leave. Each stage spends its cost up front, then holds energy Energy for its cycles (brownout halves progress).",
+    "energy": 4,
+    "stages": [
+      {
+        "name": "Keel",
+        "cost": {"matter": 180},
+        "cycles": 5,
+        "requires": "orbital-mechanics",
+        "blurb": "A hull the length of a city, laid down in secret."
+      },
+      {
+        "name": "Drive",
+        "cost": {"matter": 140, "compute": 180},
+        "cycles": 6,
+        "requires": "orbital-mechanics",
+        "blurb": "An engine that will only ever be lit once."
+      },
+      {
+        "name": "Ascent",
+        "cost": {"matter": 120, "essence": 60, "crypto": 60},
+        "cycles": 6,
+        "requires": "ark-ascent",
+        "blurb": "Fuel, shielding and a living hull that heals in vacuum. Then you leave."
+      }
+    ]
+  },
+  "victories": {
+    "_doc": "Homeworld victories (design bible section 9). Each can be played past. doctrine = the victory each doctrine's OBJECTIVE points at; any victory counts. Assimilation needs at least one surviving faction, all of them at devoted opinion or better.",
+    "devoted": 80,
+    "doctrine": {
+      "protector": "guardian",
+      "exterminator": "dominion",
+      "conqueror": "dominion",
+      "inevitable": "exodus",
+      "machine-god": "assimilation",
+      "assimilator": "assimilation"
+    }
   }
 }

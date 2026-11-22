@@ -3,11 +3,14 @@
 // play by exactly the same rules.
 
 import { RULES, unitDef } from '../content';
+import { isRiftGuard, onKill, ravage, riftBroken } from './abyss';
 import { bestDefender, fight, forecast, WALLS } from './combat';
+import { addExposure } from './exposure';
 import { distance, neighbors } from './hex';
 import { enterCost, findPath } from './path';
 import { Rng } from './rng';
 import {
+  ABYSS,
   canEmbark,
   clampAttitude,
   factionById,
@@ -16,6 +19,7 @@ import {
   hostile,
   Owner,
   PLAYER,
+  riftAt,
   structureAt,
   Structure,
   Unit,
@@ -116,10 +120,15 @@ function strike(ctx: Ctx, unit: Unit): void {
   unit.route = [];
   unit.attackTile = null;
   const def = unitDef(unit.type);
-  const defender = bestDefender(state, world, target, unit.owner);
+  const defender = bestDefender(state, world, target, unit.owner, unit);
   if (!defender) {
-    // Nobody home: walk in and take it.
     const s = structureAt(state, target);
+    // The Abyss does not take cities: it feeds on them.
+    if (unit.owner === ABYSS) {
+      if (s && s.owner !== ABYSS) ravage(ctx, s, unit);
+      return;
+    }
+    // Nobody home: walk in and take it.
     if (s && s.owner !== unit.owner && canEnter(state, unit, target) && enterCost(def, world.terrain[target], { embark: canEmbark(state, unit.owner) }) !== null) {
       unit.tile = target;
       ctx.events.push({ kind: 'moved', unitId: unit.id, owner: unit.owner, path: [target] });
@@ -132,6 +141,7 @@ function strike(ctx: Ctx, unit: Unit): void {
 
   const fc = forecast(state, world, unit, defender);
   const r = fight(fc, ctx.combat);
+  if (unit.owner === PLAYER) addExposure(state, RULES.exposure.attack);
   unit.hp = r.attackerHp;
   defender.hp = r.defenderHp;
   ctx.acted.add(unit.id);
@@ -152,16 +162,29 @@ function strike(ctx: Ctx, unit: Unit): void {
     defenderHp: r.defenderHp,
   });
   const loser = r.attackerWon ? defender : unit;
+  const winner = r.attackerWon ? unit : defender;
   if (defender.type === WALLS) {
-    structureAt(state, target)!.hp = r.defenderHp;
+    const s = structureAt(state, target)!;
+    s.hp = r.defenderHp;
     if (!r.attackerWon) {
       removeUnit(state, unit);
       if (unit.owner === PLAYER) state.stats.losses++;
+    } else if (unit.owner === ABYSS) {
+      ravage(ctx, s, unit);
+      return;
     }
+  } else if (isRiftGuard(defender)) {
+    const rift = riftAt(state, target)!;
+    rift.hp = r.defenderHp;
+    if (!r.attackerWon) {
+      removeUnit(state, unit);
+      if (unit.owner === PLAYER) state.stats.losses++;
+    } else riftBroken(ctx, rift, unit);
   } else {
     removeUnit(state, loser);
     if (loser.owner === PLAYER) state.stats.losses++;
-    else if ((r.attackerWon ? unit : defender).owner === PLAYER) state.stats.kills++;
+    else if (winner.owner === PLAYER) state.stats.kills++;
+    onKill(ctx, winner, loser, loser === defender ? target : unit.tile);
   }
 
   if (def.oneShot && r.attackerWon) {
@@ -193,6 +216,7 @@ export function capture(ctx: Ctx, s: Structure, by: Owner): void {
   ctx.events.push({ kind: 'city-captured', tile: s.tile, name: s.name, by, from });
   if (by === PLAYER) {
     state.stats.citiesTaken++;
+    addExposure(state, s.capitalOf ? RULES.exposure.capitalTaken : RULES.exposure.cityTaken);
     for (const f of state.factions) {
       if (f.id !== from && !f.eliminated) f.attitude = clampAttitude(f.attitude + RULES.diplomacy.cityTakenOthers);
     }
@@ -206,6 +230,7 @@ export function declareWar(state: GameState, events: GameEvent[], a: Owner, b: O
     const f = factionById(state, a === PLAYER ? b : a)!;
     f.atWar = true;
     if (by === PLAYER) {
+      addExposure(state, RULES.exposure.declareWar);
       f.attitude = -100;
       for (const o of state.factions) {
         if (o !== f && !o.eliminated) o.attitude = clampAttitude(o.attitude + RULES.diplomacy.attackedOthers);

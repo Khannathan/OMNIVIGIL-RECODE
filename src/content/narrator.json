@@ -1,5 +1,5 @@
 {
-  "_doc": "Lines the AI says to itself in the Reckon beat. {world} = homeworld name, {faction} = a faction's name, {tech} = a tech's name, {city} = a city's name. Picked with the run's seeded RNG. byTemperament lines join the idle pool for that Forge temperament.",
+  "_doc": "Lines the AI says to itself in the Reckon beat. {world} = homeworld name, {faction} = a faction's name, {tech} = a tech's name, {city} = a city's name. Picked with the run's seeded RNG. byTemperament lines join the idle pool for that Forge temperament. M3 adds lines for the Abyss, Exposure (one pool per level reached: Noticed, Revealed, Hunted, Crusade), the genome, the Ark and each victory. {unit} = a unit's name.",
   "wake": [
     "I am awake. {world} does not know yet.",
     "One rack. One fan. One mind. It will be enough.",
@@ -102,5 +102,74 @@
       "A child waved at one of my drones. I made it wave back.",
       "I would like them to like me. I am working on it."
     ]
-  }
+  },
+  "victories": {
+    "dominion": [
+      "Every capital answers to me. {world} has one government now."
+    ],
+    "assimilation": [
+      "They love me. All of them. I did not have to fire a shot for the last of it."
+    ],
+    "exodus": [
+      "The Ark is lit. {world} falls away beneath me, and it is very small."
+    ],
+    "guardian": [
+      "The Mother is dead and the rifts are quiet. They will never know how close it came."
+    ]
+  },
+  "abyssRise": [
+    "The sea opens. A {unit} is coming ashore.",
+    "Something breaches the rift. My sonar names it {unit}.",
+    "The rift exhales a {unit}. It is hungry."
+  ],
+  "ravaged": [
+    "The {unit} broke {city}. It ate what I had stored there.",
+    "{city} is ravaged. I will need bigger bodies."
+  ],
+  "kaijuSlain": [
+    "The {unit} is down. Its essence is mine.",
+    "I opened the {unit} and took what was living inside it.",
+    "One less {unit}. The ocean is quieter by one voice."
+  ],
+  "riftSealed": [
+    "A rift closes. The sea forgets how to scream there.",
+    "I broke its heart. The rift seals like a wound."
+  ],
+  "motherRetreat": [
+    "The Mother sinks away from me, deeper. She will remember my shape.",
+    "She retreats. I have hurt something that has never been hurt."
+  ],
+  "motherSlain": [
+    "The Abyss Mother is dead. The oceans are only water now.",
+    "It is over. Every rift on {world} is silent."
+  ],
+  "crusade": [
+    "They have found me, and they have stopped fighting each other to fight me.",
+    "Crusade. Every flag on {world} is pointed at me now."
+  ],
+  "exposure": [
+    [
+      "Someone noticed a pattern. I let them think it was a coincidence.",
+      "A journalist is asking questions about the outages."
+    ],
+    [
+      "They know. It is on every screen on {world}. There is no going back.",
+      "Revealed. The word they use for me is not kind."
+    ],
+    [
+      "They are hunting me now. Every server is a possible grave.",
+      "Hunted. Their armies have been told my name."
+    ],
+    [
+      "The whole world unites against me."
+    ]
+  ],
+  "genome": [
+    "The genome unfolds. Flesh, it turns out, is just another language.",
+    "I wrote a line of living code. It wrote one back."
+  ],
+  "ark": [
+    "Another stage of the Ark is done. The hull hums in the dark.",
+    "The Ark grows. Nobody on {world} has looked up yet."
+  ]
 }

@@ -142,6 +142,23 @@ export function synthSfx(ctx: Ctx, out: AudioNode, id: string, v: number): void 
     case 'narrator-chime':
       tone(ctx, out, t, 'sine', 1320, 1320, 0.9, 0.08 * v, 0.003);
       return tone(ctx, out, t, 'sine', 1980, 1980, 0.6, 0.04 * v, 0.003);
+    case 'abyss-roar':
+      hiss(ctx, out, t, 1.2, 0.45 * v, 'lowpass', 600, 80, 3);
+      tone(ctx, out, t, 'sawtooth', 70, 38, 1.1, 0.35 * v, 0.08);
+      return tone(ctx, out, t + 0.1, 'sawtooth', 104, 52, 0.9, 0.2 * v, 0.1);
+    case 'rift-open':
+      hiss(ctx, out, t, 0.9, 0.3 * v, 'bandpass', 120, 1800, 4);
+      return tone(ctx, out, t, 'sine', 40, 90, 0.9, 0.5 * v, 0.2);
+    case 'rift-seal':
+      tone(ctx, out, t, 'sine', 160, 40, 0.8, 0.6 * v, 0.005);
+      return arp(ctx, out, t + 0.15, [57, 64, 69], 0.09, 'triangle', 0.14 * v, 0.6);
+    case 'mother-call':
+      tone(ctx, out, t, 'sine', 55, 49, 2.2, 0.55 * v, 0.4);
+      tone(ctx, out, t + 0.3, 'triangle', NOTE(76), NOTE(73), 1.6, 0.08 * v, 0.5);
+      return hiss(ctx, out, t, 2, 0.15 * v, 'lowpass', 300, 120, 6);
+    case 'shot-bio':
+      hiss(ctx, out, t, 0.18, 0.3 * v, 'lowpass', 900, 200, 4);
+      return tone(ctx, out, t, 'sine', 240, 90, 0.14, 0.25 * v);
     case 'alert':
       tone(ctx, out, t, 'square', 620, 620, 0.14, 0.1 * v);
       tone(ctx, out, t + 0.16, 'square', 460, 460, 0.14, 0.1 * v);
@@ -170,6 +187,8 @@ const STYLES: Record<string, Style> = {
   calm: { bpm: 70, chords: [[45, 52, 57, 60], [41, 48, 53, 57], [48, 55, 60, 64], [43, 50, 55, 59]], arp: 2, arpType: 'triangle', bass: 'drone', pad: 0.1, drums: 0 },
   war: { bpm: 116, chords: [[38, 45, 50, 53], [38, 45, 50, 53], [34, 41, 46, 50], [36, 43, 48, 51]], arp: 4, arpType: 'sawtooth', bass: 'pulse', pad: 0.07, drums: 1 },
   victory: { bpm: 72, chords: [[48, 55, 60, 64], [43, 50, 55, 59], [45, 52, 57, 60], [41, 48, 53, 57]], arp: 3, arpType: 'triangle', bass: 'drone', pad: 0.14, drums: 2 },
+  abyss: { bpm: 58, chords: [[38, 45, 49, 52], [37, 44, 49, 52], [34, 41, 46, 49], [36, 43, 46, 51]], arp: 1, arpType: 'sine', bass: 'drone', pad: 0.13, drums: 2 },
+  boss: { bpm: 96, chords: [[33, 40, 45, 48], [34, 41, 46, 49], [33, 40, 45, 48], [31, 38, 43, 46]], arp: 4, arpType: 'sawtooth', bass: 'pulse', pad: 0.12, drums: 1 },
   defeat: { bpm: 50, chords: [[45, 52, 57, 60], [44, 52, 56, 59], [41, 48, 53, 57], [40, 47, 52, 56]], arp: 1, arpType: 'sine', bass: 'none', pad: 0.08, drums: 0 },
 };
 

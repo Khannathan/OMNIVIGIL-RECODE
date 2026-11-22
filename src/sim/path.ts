@@ -17,18 +17,22 @@ export interface MoveOpts {
 const EMBARKABLE = new Set(TERRAIN.map((t, i) => (t.id === 'coast' || t.id === 'shallow-sea' ? i : -1)).filter((i) => i >= 0));
 const SAILABLE = new Set(TERRAIN.map((t, i) => (t.water && t.id !== 'rift' ? i : -1)).filter((i) => i >= 0));
 
+type Mover = Pick<UnitDef, 'domain'> & Partial<Pick<UnitDef, 'amphibious' | 'hover'>>;
+
 /** Cost to enter a tile, or null when the unit can't go there. */
-export function enterCost(def: Pick<UnitDef, 'domain'>, terrain: number, opts?: MoveOpts): number | null {
+export function enterCost(def: Mover, terrain: number, opts?: MoveOpts): number | null {
   if (def.domain === 'air') return 1;
   if (def.domain === 'sea') return SAILABLE.has(terrain) ? 1 : null;
+  if (def.amphibious && TERRAIN[terrain].water) return 1;
+  if (def.hover && !TERRAIN[terrain].water) return 1;
   const c = TERRAIN[terrain].moveCost;
   if (c === null && opts?.embark && EMBARKABLE.has(terrain)) return RULES.combat.embarkCost;
   return c;
 }
 
 /** A land unit standing on water (embarked). */
-export function isEmbarked(def: Pick<UnitDef, 'domain'>, terrain: number): boolean {
-  return def.domain === 'land' && TERRAIN[terrain].water;
+export function isEmbarked(def: Mover, terrain: number): boolean {
+  return def.domain === 'land' && !def.amphibious && TERRAIN[terrain].water;
 }
 
 /**
@@ -38,7 +42,7 @@ export function isEmbarked(def: Pick<UnitDef, 'domain'>, terrain: number): boole
  */
 export function findPath(
   map: MapView,
-  def: Pick<UnitDef, 'domain'>,
+  def: Mover,
   from: number,
   to: number,
   known?: Uint8Array,
@@ -113,7 +117,7 @@ export function findPath(
  * How far along a route a unit gets this cycle. Civ rule: a unit with full
  * movement can always take one step, even into costly terrain.
  */
-export function stepsThisCycle(map: MapView, def: Pick<UnitDef, 'domain' | 'speed'>, route: number[], opts?: MoveOpts): number {
+export function stepsThisCycle(map: MapView, def: Mover & Pick<UnitDef, 'speed'>, route: number[], opts?: MoveOpts): number {
   let mp = def.speed;
   let steps = 0;
   for (const tile of route) {

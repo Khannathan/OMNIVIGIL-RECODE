@@ -1,7 +1,7 @@
 // Plain-language text for effects, units and events, shared by the HUD and
 // the Genesis Forge. Clarity rule (bible section 17): numbers, not adjectives.
 
-import { Effect, RESOURCE_NAMES, unitDef, UNITS } from '../content';
+import { Cost, Effect, RESOURCE_IDS, RESOURCE_NAMES, RESOURCE_SHORT, RULES, TITANS, unitDef, UNITS } from '../content';
 
 const DOMAIN: Record<string, string> = { land: 'land units', air: 'air units', sea: 'sea units' };
 
@@ -44,12 +44,28 @@ export function effectText(e: Effect): string {
       return `Start with an extra ${unitDef(e.unit).name}`;
     case 'startResource':
       return `Start with +${e.amount} ${RESOURCE_NAMES[e.resource]}`;
+    case 'exposure':
+      return `${e.pct > 0 ? '+' : ''}${e.pct}% Exposure from everything you do`;
+    case 'revealRifts':
+      return 'Charts every abyssal rift on the world';
   }
 }
 
-/** Units a tech unlocks. */
+/** Units, parts and projects a tech unlocks. */
 export function unlocksOf(techId: string): string[] {
-  return UNITS.filter((u) => u.requires === techId).map((u) => u.name);
+  const out = UNITS.filter((u) => u.requires === techId).map((u) => u.name);
+  if (TITANS.requires === techId) out.push('the Titan Forge (TBUs)');
+  for (const p of TITANS.parts) if (p.requires === techId) out.push(`${p.name} (TBU part)`);
+  RULES.ark.stages.forEach((st, i) => {
+    if (st.requires === techId) out.push(`Ark stage ${i + 1}: ${st.name}`);
+  });
+  return out;
+}
+
+/** "40 Matter, 10 Essence" */
+export function costText(c: Cost): string {
+  const parts = RESOURCE_IDS.filter((k) => c[k]).map((k) => `${c[k]} ${RESOURCE_SHORT[k]}`);
+  return parts.length ? parts.join(', ') : 'free';
 }
 
 export function pct(p: number): string {

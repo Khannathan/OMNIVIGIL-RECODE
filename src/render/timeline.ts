@@ -36,7 +36,7 @@ export interface Ghost {
 export interface Mark {
   t: number;
   tile: number;
-  kind: 'capture' | 'lost' | 'razed' | 'salvage' | 'built';
+  kind: 'capture' | 'lost' | 'razed' | 'salvage' | 'built' | 'rise' | 'ravaged' | 'sealed' | 'mother' | 'slain' | 'essence';
   text: string;
   /** Rarity id for salvage. */
   rarity?: string;
@@ -128,6 +128,26 @@ export function buildTimeline(
       case 'built':
         marks.push({ t: 0, tile: e.tile, kind: 'built', text: name(e) });
         break;
+      case 'abyss-rise':
+        if (!seen(e)) break;
+        marks.push({ t: 0, tile: e.tile, kind: 'rise', text: name(e) });
+        break;
+      case 'ravaged':
+      case 'rift-sealed':
+      case 'mother-retreat':
+      case 'mother-slain':
+      case 'essence': {
+        if (!seen(e)) break;
+        // These follow the fight that caused them.
+        const t = Math.max(fightCursor - fightDur * 0.25, 0);
+        const kind = e.kind === 'ravaged' ? 'ravaged' : e.kind === 'rift-sealed' ? 'sealed' : e.kind === 'mother-retreat' ? 'mother' : e.kind === 'mother-slain' ? 'slain' : 'essence';
+        marks.push({ t, tile: e.tile, kind, text: name(e) });
+        if (kind !== 'essence') {
+          batchEnd = Math.max(batchEnd, t + 0.6);
+          fightCursor = Math.max(fightCursor, t + 0.6);
+        }
+        break;
+      }
       default:
         break;
     }
@@ -142,7 +162,7 @@ export function buildTimeline(
   // Let the big moments breathe before the Reckon.
   if (marks.some((m) => m.kind === 'salvage')) end += 0.9;
   for (const m of marks) {
-    if (m.kind === 'capture' || m.kind === 'lost' || m.kind === 'razed') end = Math.max(end, m.t + 1.1);
+    if (m.kind === 'capture' || m.kind === 'lost' || m.kind === 'razed' || m.kind === 'ravaged' || m.kind === 'sealed' || m.kind === 'mother' || m.kind === 'slain') end = Math.max(end, m.t + 1.1);
     if (m.kind === 'built') end = Math.max(end, 0.6);
   }
   if (fights.length) end = Math.max(end, fights[fights.length - 1].t + fights[fights.length - 1].dur + 0.35);

@@ -11,16 +11,19 @@
     "common": [
       { "kind": "resource", "resource": "compute", "amount": 25 },
       { "kind": "resource", "resource": "matter", "amount": 25 },
-      { "kind": "resource", "resource": "influence", "amount": 15 }
+      { "kind": "resource", "resource": "influence", "amount": 15 },
+      { "kind": "resource", "resource": "crypto", "amount": 15 }
     ],
     "rare": [
       { "kind": "resource", "resource": "compute", "amount": 60 },
       { "kind": "resource", "resource": "matter", "amount": 55 },
+      { "kind": "resource", "resource": "essence", "amount": 15 },
       { "kind": "unit", "unit": "sentinel-trooper" },
       { "kind": "relic", "relic": "cracked-lens" }
     ],
     "epic": [
       { "kind": "unit", "unit": "bastion-tank" },
+      { "kind": "resource", "resource": "crypto", "amount": 50 },
       { "kind": "relic", "relic": "echo-lattice" },
       { "kind": "relic", "relic": "iron-psalm" },
       { "kind": "relic", "relic": "silent-ledger" }
@@ -62,6 +65,11 @@
     "capitalTaken": "legendary",
     "factionFallen": "epic",
     "firstContact": "common",
-    "victory": "mythic"
+    "victory": "mythic",
+    "riftSealed": "epic",
+    "motherRetreat": "legendary",
+    "motherSlain": "mythic",
+    "arkStage": "epic",
+    "gene": "rare"
   }
 }

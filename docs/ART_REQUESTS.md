@@ -381,3 +381,125 @@ Length: under 1 s each
 Suno prompt: soft warm synth pulse like a heartbeat of light / harsh digital glitch stutter / single crystalline bell chime, AI, minimal
 Context: The AI Core reacting (good news / bad news) and the narrator speaking in the Reckon.
 ```
+
+---
+
+## M3: Depth
+
+The Abyss, the Titan Forge, the Genome Lab and the new resources. The game already runs with placeholders under these names.
+
+```
+ART REQUEST #23
+Asset: unit_skitterling_idle.png
+What: Skitterling, the smallest Abyssian: a dog-sized six-legged deep-sea crustacean-insect, wet dark hide, one glowing eye. Idle = legs twitching, body bobbing.
+Size: 64x64 per frame, 4 frames in one row (256x64)
+View: side / 3-4, facing right
+Palette notes: hide #1d2f3a and #33515c, belly #5e9e9c, 1px dark outline; the glowing eye in pure #ff00ff (the game tints it bio-green #c8ff5a)
+Background: transparent PNG
+Context: Swarms out of the rifts early. Not a kaiju: ordinary units can fight it.
+```
+
+```
+ART REQUEST #24
+Asset: unit_tidecrawler_idle.png, unit_lantern_idle.png, unit_riftback_idle.png, unit_maw_idle.png, unit_choir_idle.png, unit_deep-king_idle.png, unit_sovereign_idle.png
+What: The kaiju of the Abyss, one sheet each, in rising size and menace:
+  - Tidecrawler: a crab-like giant with four legs and two raised claws.
+  - Lantern: an anglerfish on stubby legs, a long lure stalk ending in a glowing bulb.
+  - Riftback: a long low beast with a row of red crystal spines along its back.
+  - Maw: a walking mouth, rows of bone-white teeth that open and close.
+  - Choir: a tall jellyfish-thing on tendrils, concentric glowing rings on its bell (it "sings").
+  - Deep King: a hulking upright titan with a crown of glowing horns and long arms.
+  - Sovereign: a vast eye in a ring of red spikes, carried on a skirt of tentacles; the apex predator.
+  Idle = breathing, tendrils drifting, mouths working.
+Size: 128x128 per frame, 4 frames in one row (512x128 each)
+View: side / 3-4, facing right, standing on the bottom edge
+Palette notes: hide #1d2f3a and #33515c, belly #5e9e9c, flesh #7a2236, bone #d8d0c0, rift red #ff2848; glowing eyes, lures and spots in pure #ff00ff (tinted bio-green #c8ff5a in game). 1px dark outline. They should feel wet, ancient and wrong.
+Background: transparent PNG
+Context: Kaiju that wade ashore and smash settlements. Drawn at about half scale (64-80 px) so they tower over 48 px units.
+```
+
+```
+ART REQUEST #25
+Asset: unit_rift-heart_idle.png, unit_abyss-mother_idle.png
+What: (1) Rift Heart: a pulsing organ of red flesh rooted in a glowing ring of rift water, veins spreading out. Idle = heartbeat swell. (2) The Abyss Mother, the boss: a colossal crowned matriarch rising waist-deep from her rift, many tentacles, a pale belly with glowing egg sacs, three eyes, a crown of red spikes. Idle = slow breathing, tentacles shifting.
+Size: Rift Heart 128x128 per frame (512x128); Abyss Mother 256x256 per frame, 4 frames in one row (1024x256)
+View: 3/4, centred on a hex
+Palette notes: as #24; egg sacs and eyes in pure #ff00ff (tinted bio-green #c8ff5a)
+Background: transparent PNG
+Context: Each open rift shows its heart; the first rift holds the Mother. You attack them with air units or amphibious TBUs to seal the rift.
+```
+
+```
+ART REQUEST #26
+Asset: tbu_head_sentinel-optics.png, tbu_head_hunter-array.png, tbu_head_warden-crown.png, tbu_head_oracle-dome.png, tbu_core_fission-core.png, tbu_core_fusion-core.png, tbu_core_riftheart-core.png, tbu_core_precursor-core.png, tbu_arm_autocannon.png, tbu_arm_plasma-lance.png, tbu_arm_missile-pod.png, tbu_arm_riftblade.png, tbu_arm_railgun.png, tbu_arm_aegis-arm.png, tbu_back_sensor-mast.png, tbu_back_missile-rack.png, tbu_back_repair-drones.png, tbu_back_reactor-pack.png, tbu_legs_strider.png, tbu_legs_bulwark-treads.png, tbu_legs_tidewalker.png, tbu_legs_skylance-jets.png
+What: Modular parts for Titan Battle Units, giant mechs the player assembles in the Titan Forge. Every part is drawn on the SAME 128x128 canvas and joint layout so any combination stacks into one mech: ground at y 120, hips at y 84, shoulders at about (88, 52), neck at (64, 40). Torso spans x 46-82. Arms are drawn as the near (right-hand) arm hanging from the shoulder with the weapon pointing right; the game mirrors and darkens the same art for the far arm. Back parts sit behind the left shoulder.
+  - Heads: Sentinel Optics (visor block), Hunter Array (three eyes, antenna), Warden Crown (gold crest), Oracle Dome (glass dome).
+  - Cores: Fission Core (amber reactor window), Fusion Core (cyan ring), Riftheart Core (a caged living heart, bio-green), Precursor Core (gold diamond).
+  - Arms: Autocannon, Plasma Lance (long cyan beam emitter), Missile Pod, Riftblade (organic green blade), Railgun (twin long rails), Aegis Arm (tower shield).
+  - Backs: Sensor Mast, Missile Rack, Repair Drones (two small drones), Reactor Pack (twin amber cylinders).
+  - Legs: Strider (two armoured legs), Bulwark Treads (tank tracks), Tidewalker (long splayed wading legs, wet feet), Skylance Jets (hovering thrusters with flames).
+Size: 128x128 each
+View: side / 3-4, facing right
+Palette notes: steel #4a5560 and #6b7883, dark #2a343c, cyan #5fe0ff, amber #ffb84a, gold #ffd166, bio-green #c8ff5a; team-coloured trim in pure #ff00ff. 1px dark outline.
+Background: transparent PNG
+Context: Stacked live in the Titan Forge preview (shown at 256 px) and on the map at about 72 px. Should read as one heavy mech, bigger than every other unit.
+```
+
+```
+ART REQUEST #27
+Asset: icon_essence.png, icon_crypto.png, icon_exposure.png
+What: Three HUD icons. Symbiotic Essence = a teal droplet of living tissue with a bio-green glowing nucleus. Crypto = an amber coin with a stylised angular C. Exposure = a wide-open watching eye with a red iris.
+Size: 32x32 each, must read at 20 px
+View: flat icon
+Palette notes: Essence #5e9e9c and #c8ff5a; Crypto #ffb84a and #a8741a; Exposure white #e6ecee, iris #e0283c. 1px dark outline.
+Background: transparent PNG
+Context: The HUD top bar, next to Energy, Compute, Matter and Influence.
+```
+
+```
+ART REQUEST #28
+Asset: icon_symbiote_chitin-mantle.png, icon_symbiote_razor-brood.png, icon_symbiote_tidal-graft.png, icon_symbiote_neural-lace.png, icon_symbiote_leviathan-hide.png, icon_symbiote_apex-parasite.png, icon_symbiote_deep-choir.png, icon_symbiote_chorus-seed.png
+What: Symbiote strains, living organisms fused into machines. One icon each:
+  - Chitin Mantle: overlapping cyan-tinted shell plates.
+  - Razor Brood: a cluster of hooked red larvae.
+  - Tidal Graft: a teal knot of regenerating tissue.
+  - Neural Lace: a violet web of nerves.
+  - Leviathan Hide: a slab of thick scaled kaiju skin.
+  - Apex Parasite: a red lamprey-like creature with rings of teeth.
+  - Deep Choir: a teal jellyfish bell with glowing rings.
+  - Chorus Seed: a violet seed pod with a soft glow inside.
+Size: 64x64 each, must read at 48 px
+View: flat icon, slight 3/4
+Palette notes: strand colours: Carapace cyan #5fe0ff, Predation red #ff3a4a, Tide teal #5e9e9c, Mind violet #b98cff; bio-green highlights #c8ff5a. 1px dark outline.
+Background: transparent PNG
+Context: The Genome Lab, listing strains you can fuse into units.
+```
+
+```
+ART REQUEST #29
+Asset: icon_ark.png
+What: The Exodus Ark: a slim colossal ship standing on its tail, engines lit, rising off the homeworld.
+Size: 64x64
+View: flat icon
+Palette notes: steel #6b7883, cyan windows #5fe0ff, engine flame #ffb84a. 1px dark outline.
+Background: transparent PNG
+Context: Reward card and the Exodus victory.
+```
+
+```
+AUDIO REQUEST #14
+File: music_abyss.mp3, music_abyss-mother.mp3
+Type: music loop
+Length: 2-3 min loop each
+Suno prompt: (1) deep-sea horror ambient, slow heavy sub drones, distant whale-like moans, sparse percussion like a giant heartbeat, dread, instrumental. (2) epic boss battle, dark orchestral hybrid with pounding taiko and synth bass, choir chanting, alien and colossal, instrumental
+Context: (1) plays while a kaiju is near your settlements; (2) plays while you fight the Abyss Mother.
+```
+
+```
+AUDIO REQUEST #15
+File: sfx_abyss-roar.ogg, sfx_rift-open.ogg, sfx_rift-seal.ogg, sfx_mother-call.ogg, sfx_bio-spit.ogg
+Type: sfx
+Length: roar about 1.5 s; rift open about 1 s; seal about 1.2 s; Mother call about 2.5 s; spit under 0.3 s
+Suno prompt: monstrous kaiju roar, wet and guttural / bubbling underwater rumble with a rising groan / heavy sealing thud with a bright resolving chime / huge whale-like moan of an ancient sea goddess, reverb / wet acid spit, game sound effects
+Context: A kaiju rises from a rift / a rift wakes / you seal a rift / the Abyss Mother is hurt or dies / an Abyssian's attack in the Watch.
+```

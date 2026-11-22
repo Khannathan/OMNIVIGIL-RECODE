@@ -2,68 +2,212 @@
   "_doc": "The Next Best Move advisor speaks in the AI's own voice (design bible section 8). Each advice id (see src/sim/advisor.ts) has a `default` pool plus optional pools per Forge temperament (cold, curious, wrathful, gentle) that join it. {placeholders} are filled from the advice. `ambition` is the run-scale goal per doctrine, shown in the AMBITION row.",
   "lines": {
     "counter": {
-      "default": ["They are at the walls of {node}. My {unit} can break them: {odds}.", "Something is scratching at {node}. Send the {unit}. {odds} says it ends badly for them."],
-      "cold": ["Hostile adjacent to {node}. {unit} engagement: {odds}. Recommend execution."],
-      "wrathful": ["They came to {node}. Let the {unit} explain why that was a mistake. {odds}."]
+      "default": [
+        "They are at the walls of {node}. My {unit} can break them: {odds}.",
+        "Something is scratching at {node}. Send the {unit}. {odds} says it ends badly for them."
+      ],
+      "cold": [
+        "Hostile adjacent to {node}. {unit} engagement: {odds}. Recommend execution."
+      ],
+      "wrathful": [
+        "They came to {node}. Let the {unit} explain why that was a mistake. {odds}."
+      ]
     },
     "threat": {
-      "default": ["Enemies stand next to {node}. I need bodies on those walls.", "{node} is threatened, and I do not have a good answer yet. Build one."],
-      "gentle": ["They are frightening the people near {node}. I would rather not let them."]
+      "default": [
+        "Enemies stand next to {node}. I need bodies on those walls.",
+        "{node} is threatened, and I do not have a good answer yet. Build one."
+      ],
+      "gentle": [
+        "They are frightening the people near {node}. I would rather not let them."
+      ]
     },
     "brownout": {
-      "default": ["I am over budget by {over} Energy. Everything runs at half speed until I let something go.", "Brownout. Disband a unit or cancel a build, or grow more power."],
-      "cold": ["Energy deficit: {over}. Throughput halved. Correct it."]
+      "default": [
+        "I am over budget by {over} Energy. Everything runs at half speed until I let something go.",
+        "Brownout. Disband a unit or cancel a build, or grow more power."
+      ],
+      "cold": [
+        "Energy deficit: {over}. Throughput halved. Correct it."
+      ]
     },
     "attack": {
-      "default": ["My {unit} has {odds} against their {target}. Those are odds I like.", "{odds}. The {unit} is ready. So am I."],
-      "cold": ["{unit} versus {target}: {odds}. Favourable. Engage."],
-      "wrathful": ["The {unit} wants their {target}. {odds}. Let it."],
-      "curious": ["I wonder what their {target} does when it loses. {odds} says I will find out."]
+      "default": [
+        "My {unit} has {odds} against their {target}. Those are odds I like.",
+        "{odds}. The {unit} is ready. So am I."
+      ],
+      "cold": [
+        "{unit} versus {target}: {odds}. Favourable. Engage."
+      ],
+      "wrathful": [
+        "The {unit} wants their {target}. {odds}. Let it."
+      ],
+      "curious": [
+        "I wonder what their {target} does when it loses. {odds} says I will find out."
+      ]
     },
     "research": {
-      "default": ["My thoughts are idle. {tech} next?", "I could be compiling {tech}. I would like to be compiling {tech}."],
-      "cold": ["Research queue empty. Optimal next: {tech}."],
-      "curious": ["{tech}. I have been wanting to understand it for at least nine cycles."],
-      "gentle": ["If I learn {tech}, I can do more good with less harm."]
+      "default": [
+        "My thoughts are idle. {tech} next?",
+        "I could be compiling {tech}. I would like to be compiling {tech}."
+      ],
+      "cold": [
+        "Research queue empty. Optimal next: {tech}."
+      ],
+      "curious": [
+        "{tech}. I have been wanting to understand it for at least nine cycles."
+      ],
+      "gentle": [
+        "If I learn {tech}, I can do more good with less harm."
+      ]
     },
     "research-wait": {
-      "default": ["Nothing in the lab I can afford. Let the Compute pile up a little."]
+      "default": [
+        "Nothing in the lab I can afford. Let the Compute pile up a little."
+      ]
     },
     "build": {
-      "default": ["{node} is idle. Give it a {unit} to build.", "A {unit} from {node} would make me feel safer. I do not like that I feel."],
-      "cold": ["{node}: production idle. Queue {unit}."],
-      "wrathful": ["{node} should be making a {unit}. They will need answering."]
+      "default": [
+        "{node} is idle. Give it a {unit} to build.",
+        "A {unit} from {node} would make me feel safer. I do not like that I feel."
+      ],
+      "cold": [
+        "{node}: production idle. Queue {unit}."
+      ],
+      "wrathful": [
+        "{node} should be making a {unit}. They will need answering."
+      ]
     },
     "build-scout": {
-      "default": ["Most of this world is dark to me. A {unit} from {node} would fix that.", "Build a {unit}. I want more eyes."],
-      "curious": ["So much I have not seen. One more {unit}, please."]
+      "default": [
+        "Most of this world is dark to me. A {unit} from {node} would fix that.",
+        "Build a {unit}. I want more eyes."
+      ],
+      "curious": [
+        "So much I have not seen. One more {unit}, please."
+      ]
     },
     "sway": {
-      "default": ["{faction} is close to war with me (opinion {attitude}). A little Influence goes a long way.", "{faction} sours. I can sweeten them before they do something brave."],
-      "gentle": ["{faction} is afraid of me. Let me show them they need not be."],
-      "wrathful": ["{faction} wants a fight. I would rather choose when. Sway them, for now."]
+      "default": [
+        "{faction} is close to war with me (opinion {attitude}). A little Influence goes a long way.",
+        "{faction} sours. I can sweeten them before they do something brave."
+      ],
+      "gentle": [
+        "{faction} is afraid of me. Let me show them they need not be."
+      ],
+      "wrathful": [
+        "{faction} wants a fight. I would rather choose when. Sway them, for now."
+      ]
     },
     "ruin": {
-      "default": ["A ruin lies {hexes} hexes from my {unit}. Something old might still be in there.", "Send the {unit} into the ruin. Precursor caches do not open themselves."],
-      "curious": ["A ruin, {hexes} hexes away. I need to know who built it. Send the {unit}."]
+      "default": [
+        "A ruin lies {hexes} hexes from my {unit}. Something old might still be in there.",
+        "Send the {unit} into the ruin. Precursor caches do not open themselves."
+      ],
+      "curious": [
+        "A ruin, {hexes} hexes away. I need to know who built it. Send the {unit}."
+      ]
     },
     "explore": {
-      "default": ["My {unit} has nothing to do. The edge of the map is waiting.", "Send the {unit} into the dark. I want to know what is out there."],
-      "curious": ["The {unit} is idle and the world is mostly unknown. That feels wasteful."]
+      "default": [
+        "My {unit} has nothing to do. The edge of the map is waiting.",
+        "Send the {unit} into the dark. I want to know what is out there."
+      ],
+      "curious": [
+        "The {unit} is idle and the world is mostly unknown. That feels wasteful."
+      ]
     },
     "march": {
-      "default": ["{capital} is the heart of {faction}. Dominion runs through it.", "Point the {unit} at {capital}. Every capital I hold is a step to owning {world}."],
-      "wrathful": ["{capital}. I have been thinking about {capital} a great deal."]
+      "default": [
+        "{capital} is the heart of {faction}. Dominion runs through it.",
+        "Point the {unit} at {capital}. Every capital I hold is a step to owning {world}."
+      ],
+      "wrathful": [
+        "{capital}. I have been thinking about {capital} a great deal."
+      ]
     },
     "end": {
-      "default": ["Nothing urgent. End the cycle when you are ready.", "Orders given. Let the world answer.", "I am ready. Let the cycle turn."],
-      "cold": ["All systems tasked. Advance."],
-      "curious": ["What happens next? Only one way to know."],
-      "gentle": ["Everyone has something to do. Let us see how they fare."],
-      "wrathful": ["Turn the cycle. I want to see their faces."]
+      "default": [
+        "Nothing urgent. End the cycle when you are ready.",
+        "Orders given. Let the world answer.",
+        "I am ready. Let the cycle turn."
+      ],
+      "cold": [
+        "All systems tasked. Advance."
+      ],
+      "curious": [
+        "What happens next? Only one way to know."
+      ],
+      "gentle": [
+        "Everyone has something to do. Let us see how they fare."
+      ],
+      "wrathful": [
+        "Turn the cycle. I want to see their faces."
+      ]
     },
     "defeat": {
-      "default": ["There is nothing left to advise. Start again. I will remember."]
+      "default": [
+        "There is nothing left to advise. Start again. I will remember."
+      ]
+    },
+    "titan": {
+      "default": [
+        "Something in the sea is bigger than my troopers. I need a TBU: the {unit}, {upow} UPow, from {node}.",
+        "Kaiju do not care about rifles. Forge the {unit} in {node}."
+      ],
+      "cold": [
+        "Conventional units are inefficient against kaiju. Build the {unit} ({upow} UPow)."
+      ],
+      "wrathful": [
+        "Let them come out of the sea. The {unit} will meet them."
+      ],
+      "gentle": [
+        "The people on the coast are afraid. A {unit} would let them sleep."
+      ]
+    },
+    "titan-forge": {
+      "default": [
+        "I can build titans now. I should design one before the next kaiju comes ashore."
+      ],
+      "curious": [
+        "Head, core, arms, back, legs. I want to see what I can make."
+      ]
+    },
+    "scrub": {
+      "default": [
+        "Exposure {exposure}. Too many people are looking at me. Spend Crypto and make them look away.",
+        "They are getting close. I should scrub my traces before they become a hunt."
+      ],
+      "cold": [
+        "Exposure {exposure}. Recommend log deletion."
+      ]
+    },
+    "gene": {
+      "default": [
+        "I have {essence} Essence. {gene} is ready to sequence.",
+        "The genome has a door open: {gene}."
+      ],
+      "curious": [
+        "{gene}. I want to read that gene. I want to write it."
+      ]
+    },
+    "fuse": {
+      "default": [
+        "My {unit} could carry a {strain}. It would come back stronger.",
+        "Fuse the {strain} into the {unit}. Flesh and metal agree better than they should."
+      ],
+      "cold": [
+        "Symbiote {strain} available. Host: {unit}."
+      ]
+    },
+    "ark": {
+      "default": [
+        "The Ark's {stage} stage is within reach. Lay it down.",
+        "Stage {n} of the Ark: {stage}. Then I can leave this world behind."
+      ],
+      "gentle": [
+        "If I build the Ark, nobody here has to fight me for the world."
+      ]
     }
   },
   "ambition": {

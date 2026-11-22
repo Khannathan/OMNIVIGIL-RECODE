@@ -2,7 +2,7 @@
 // modifiers. Every rule that a tech or Forge option can change reads from
 // here, so adding a new tech is a data edit in techs.json.
 
-import { Domain, Effect, FORGE, ForgeOption, relicDef, ResourceId, techDef } from '../content';
+import { Domain, Effect, FORGE, ForgeOption, geneDef, relicDef, ResourceId, techDef } from '../content';
 import type { AiProfile, GameState } from './state';
 
 export interface Mods {
@@ -19,7 +19,12 @@ export interface Mods {
   embark: boolean;
   attitude: number;
   sway: number;
+  /** % change to Exposure gains. */
+  exposure: number;
+  revealRifts: boolean;
 }
+
+type EffectSource = Pick<GameState, 'ai' | 'techs'> & { relics?: string[]; genes?: string[] };
 
 export function forgeOptions(ai: AiProfile): ForgeOption[] {
   const find = (list: ForgeOption[], id: string) => list.find((o) => o.id === id);
@@ -32,7 +37,7 @@ export function forgeOptions(ai: AiProfile): ForgeOption[] {
 }
 
 /** Every effect the player has, tagged with where it came from. */
-export function playerEffects(state: Pick<GameState, 'ai' | 'techs'> & { relics?: string[] }): Array<{ effect: Effect; source: string }> {
+export function playerEffects(state: EffectSource): Array<{ effect: Effect; source: string }> {
   const out: Array<{ effect: Effect; source: string }> = [];
   for (const o of forgeOptions(state.ai)) for (const effect of o.effects) out.push({ effect, source: o.name });
   for (const id of state.techs) {
@@ -43,16 +48,20 @@ export function playerEffects(state: Pick<GameState, 'ai' | 'techs'> & { relics?
     const r = relicDef(id);
     for (const effect of r.effects) out.push({ effect, source: r.name });
   }
+  for (const id of state.genes ?? []) {
+    const g = geneDef(id);
+    for (const effect of g.effects ?? []) out.push({ effect, source: g.name });
+  }
   return out;
 }
 
 const cache = new WeakMap<object, { key: string; mods: Mods }>();
 
-export function mods(state: Pick<GameState, 'ai' | 'techs'> & { relics?: string[] }): Mods {
-  const key = `${state.techs.length}|${state.relics?.length ?? 0}|${state.ai.origin}|${state.ai.architecture}|${state.ai.temperament}|${state.ai.doctrine}`;
+export function mods(state: EffectSource): Mods {
+  const key = `${state.techs.length}|${state.relics?.length ?? 0}|${state.genes?.length ?? 0}|${state.ai.origin}|${state.ai.architecture}|${state.ai.temperament}|${state.ai.doctrine}`;
   const hit = cache.get(state);
   if (hit && hit.key === key) return hit.mods;
-  const zero = (): Record<ResourceId, number> => ({ compute: 0, matter: 0, influence: 0 });
+  const zero = (): Record<ResourceId, number> => ({ compute: 0, matter: 0, influence: 0, essence: 0, crypto: 0 });
   const m: Mods = {
     yieldFlat: { node: zero(), city: zero() },
     yieldPct: zero(),
@@ -67,6 +76,8 @@ export function mods(state: Pick<GameState, 'ai' | 'techs'> & { relics?: string[
     embark: false,
     attitude: 0,
     sway: 0,
+    exposure: 0,
+    revealRifts: false,
   };
   for (const { effect: e, source } of playerEffects(state)) {
     switch (e.kind) {
@@ -110,6 +121,12 @@ export function mods(state: Pick<GameState, 'ai' | 'techs'> & { relics?: string[
         break;
       case 'sway':
         m.sway += e.flat;
+        break;
+      case 'exposure':
+        m.exposure += e.pct;
+        break;
+      case 'revealRifts':
+        m.revealRifts = true;
         break;
       case 'startUnit':
       case 'startResource':
